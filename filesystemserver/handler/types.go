@@ -31,12 +31,16 @@ type FileInfo struct {
 
 // FileNode represents a node in the file tree
 type FileNode struct {
-	Name     string      `json:"name"`
-	Path     string      `json:"path"`
-	Type     string      `json:"type"` // "file" or "directory"
-	Size     int64       `json:"size,omitempty"`
-	Modified time.Time   `json:"modified,omitempty"`
-	Children []*FileNode `json:"children,omitempty"`
+	Name     string    `json:"name"`
+	Path     string    `json:"path"`
+	Type     string    `json:"type"` // "file" or "directory"
+	Size     int64     `json:"size,omitempty"`
+	Modified time.Time `json:"modified,omitempty"`
+	// FileCount is the number of files directly inside a directory. It is only
+	// set when the tree omits individual files (depth > 1), so that the caller
+	// still knows how much a directory holds.
+	FileCount *int        `json:"file_count,omitempty"`
+	Children  []*FileNode `json:"children,omitempty"`
 }
 
 // SearchResult represents a single match in a file

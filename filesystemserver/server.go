@@ -138,13 +138,13 @@ func NewFilesystemServer(rootDir string) (*server.MCPServer, error) {
 
 	s.AddTool(mcp.NewTool(
 		"tree",
-		mcp.WithDescription("Returns a hierarchical JSON representation of a directory structure."),
+		mcp.WithDescription("Returns a hierarchical JSON representation of a directory structure. Individual files are only listed at depth 1; deeper trees return directories only. Any directory whose files are not listed carries a file_count of the files directly inside it."),
 		mcp.WithString("path",
 			mcp.Description("Path of the directory to traverse, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("depth",
-			mcp.Description("Maximum depth to traverse (default: 3)"),
+			mcp.Description("Maximum depth to traverse (default: 2). Values above 1 omit files and report file_count per directory instead"),
 		),
 		mcp.WithBoolean("follow_symlinks",
 			mcp.Description("Whether to follow symbolic links (default: false)"),

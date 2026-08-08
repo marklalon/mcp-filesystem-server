@@ -62,7 +62,8 @@ as arguments, but are rejected if they fall outside the workspace directory.
 
 - **tree**
   - Returns a hierarchical JSON representation of a directory structure
-  - Parameters: `path` (required): Path of the directory to traverse, `depth` (optional): Maximum depth to traverse (default: 3), `follow_symlinks` (optional): Whether to follow symbolic links (default: false)
+  - Parameters: `path` (required): Path of the directory to traverse, `depth` (optional): Maximum depth to traverse (default: 2), `follow_symlinks` (optional): Whether to follow symbolic links (default: false)
+  - Individual files are only listed when `depth` is 1. For `depth` greater than 1 the result contains directories only, so a large tree cannot blow up the response. Any directory whose files are not listed — the directories at the bottom of a `depth` 1 tree included — carries a `file_count` field with the number of files directly inside it, so it is never mistaken for an empty one.
 
 #### Search and Information
 

@@ -13,6 +13,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// parseTree extracts the JSON tree from a tree tool response.
+func parseTree(t *testing.T, text string) *FileNode {
+	t.Helper()
+
+	start := strings.Index(text, "{")
+	require.GreaterOrEqual(t, start, 0, "response contains no JSON")
+
+	var tree FileNode
+	require.NoError(t, json.Unmarshal([]byte(text[start:]), &tree))
+	return &tree
+}
+
+func childNames(node *FileNode) []string {
+	names := make([]string, 0, len(node.Children))
+	for _, child := range node.Children {
+		names = append(names, child.Name)
+	}
+	return names
+}
+
 func TestHandleTree(t *testing.T) {
 	// Setup a temporary directory for the test
 	tmpDir := t.TempDir()
@@ -73,16 +93,16 @@ func TestHandleTree(t *testing.T) {
 		require.Len(t, res.Content, 2)
 		textContent := res.Content[0].(mcp.TextContent)
 		assert.Contains(t, textContent.Text, "Directory tree for")
-		assert.Contains(t, textContent.Text, "max depth: 3")
+		// The default depth is 2, so the tree is a directory skeleton
+		assert.Contains(t, textContent.Text, "max depth: 2")
 
-		// Parse the JSON to verify structure
 		lines := textContent.Text
-		assert.Contains(t, lines, "file1.txt")
 		assert.Contains(t, lines, "subdir1")
-		assert.Contains(t, lines, "file2.txt")
 		assert.Contains(t, lines, "subdir2")
-		assert.Contains(t, lines, "file3.txt")
 		assert.Contains(t, lines, "emptydir")
+		assert.NotContains(t, lines, "file1.txt")
+		assert.NotContains(t, lines, "file2.txt")
+		assert.NotContains(t, lines, "file3.txt")
 
 		// Verify embedded resource
 		embeddedResource := res.Content[1].(mcp.EmbeddedResource)
@@ -90,35 +110,7 @@ func TestHandleTree(t *testing.T) {
 		assert.Equal(t, "application/json", embeddedResource.Resource.(mcp.TextResourceContents).MIMEType)
 	})
 
-	t.Run("tree with custom depth", func(t *testing.T) {
-		req := mcp.CallToolRequest{
-			Params: mcp.CallToolParams{
-				Arguments: map[string]interface{}{
-					"path":  tmpDir,
-					"depth": 2.0, // Only go 2 levels deep
-				},
-			},
-		}
-
-		res, err := fsHandler.HandleTree(ctx, req)
-		require.NoError(t, err)
-		require.False(t, res.IsError)
-
-		textContent := res.Content[0].(mcp.TextContent)
-		assert.Contains(t, textContent.Text, "max depth: 2")
-
-		// Should include file1.txt, subdir1, file2.txt, subdir2, emptydir
-		// but NOT file3.txt (which is at depth 3)
-		assert.Contains(t, textContent.Text, "file1.txt")
-		assert.Contains(t, textContent.Text, "subdir1")
-		assert.Contains(t, textContent.Text, "file2.txt")
-		assert.Contains(t, textContent.Text, "subdir2")
-		assert.Contains(t, textContent.Text, "emptydir")
-		// file3.txt should not be included at depth 2
-		assert.NotContains(t, textContent.Text, "file3.txt")
-	})
-
-	t.Run("tree with depth 1", func(t *testing.T) {
+	t.Run("tree with depth 1 lists files", func(t *testing.T) {
 		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Arguments: map[string]interface{}{
@@ -135,14 +127,131 @@ func TestHandleTree(t *testing.T) {
 		textContent := res.Content[0].(mcp.TextContent)
 		assert.Contains(t, textContent.Text, "max depth: 1")
 
-		// Should only include immediate children
-		assert.Contains(t, textContent.Text, "file1.txt")
-		assert.Contains(t, textContent.Text, "subdir1")
-		assert.Contains(t, textContent.Text, "emptydir")
-		// Should not include nested files
+		tree := parseTree(t, textContent.Text)
+		assert.Nil(t, tree.FileCount, "file_count should be absent when files are listed")
+		assert.ElementsMatch(t,
+			[]string{"file1.txt", "subdir1", "emptydir"},
+			childNames(tree),
+		)
+
+		// The subdirectories sit at the max depth, so their own files are not
+		// listed and show up as counts instead.
+		for _, child := range tree.Children {
+			switch child.Name {
+			case "subdir1":
+				require.NotNil(t, child.FileCount)
+				assert.Equal(t, 1, *child.FileCount, "subdir1 holds file2.txt")
+				assert.Empty(t, child.Children)
+			case "emptydir":
+				require.NotNil(t, child.FileCount)
+				assert.Equal(t, 0, *child.FileCount)
+			case "file1.txt":
+				assert.Equal(t, "file", child.Type)
+				assert.Nil(t, child.FileCount)
+			}
+		}
+	})
+
+	t.Run("tree deeper than 1 omits files and reports counts", func(t *testing.T) {
+		req := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{
+					"path":  tmpDir,
+					"depth": 2.0, // Only go 2 levels deep
+				},
+			},
+		}
+
+		res, err := fsHandler.HandleTree(ctx, req)
+		require.NoError(t, err)
+		require.False(t, res.IsError)
+
+		textContent := res.Content[0].(mcp.TextContent)
+		assert.Contains(t, textContent.Text, "max depth: 2")
+		assert.Contains(t, textContent.Text, "files omitted")
+
+		// No file is listed anywhere in the tree
+		assert.NotContains(t, textContent.Text, "file1.txt")
 		assert.NotContains(t, textContent.Text, "file2.txt")
-		assert.NotContains(t, textContent.Text, "subdir2")
 		assert.NotContains(t, textContent.Text, "file3.txt")
+
+		tree := parseTree(t, textContent.Text)
+		require.NotNil(t, tree.FileCount)
+		assert.Equal(t, 1, *tree.FileCount, "root holds file1.txt")
+		assert.ElementsMatch(t, []string{"subdir1", "emptydir"}, childNames(tree))
+
+		for _, child := range tree.Children {
+			require.NotNil(t, child.FileCount, "child %s should carry a file count", child.Name)
+			switch child.Name {
+			case "subdir1":
+				assert.Equal(t, 1, *child.FileCount, "subdir1 holds file2.txt")
+				require.Len(t, child.Children, 1)
+
+				// subdir2 sits at the max depth: its subdirectories are not
+				// explored, but its files are still counted.
+				subdir2 := child.Children[0]
+				assert.Equal(t, "subdir2", subdir2.Name)
+				assert.Empty(t, subdir2.Children)
+				require.NotNil(t, subdir2.FileCount)
+				assert.Equal(t, 1, *subdir2.FileCount, "subdir2 holds file3.txt")
+			case "emptydir":
+				assert.Equal(t, 0, *child.FileCount)
+				assert.Empty(t, child.Children)
+			}
+		}
+	})
+
+	t.Run("deepest expanded directory still reports its file count", func(t *testing.T) {
+		req := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{
+					"path":  tmpDir,
+					"depth": 3.0,
+				},
+			},
+		}
+
+		res, err := fsHandler.HandleTree(ctx, req)
+		require.NoError(t, err)
+		require.False(t, res.IsError)
+
+		tree := parseTree(t, res.Content[0].(mcp.TextContent).Text)
+
+		var subdir1 *FileNode
+		for _, child := range tree.Children {
+			if child.Name == "subdir1" {
+				subdir1 = child
+			}
+		}
+		require.NotNil(t, subdir1)
+		require.Len(t, subdir1.Children, 1)
+
+		// At depth 3 subdir2 is still expanded, so file3.txt shows up as a
+		// count rather than being dropped silently.
+		subdir2 := subdir1.Children[0]
+		assert.Equal(t, "subdir2", subdir2.Name)
+		assert.Empty(t, subdir2.Children)
+		require.NotNil(t, subdir2.FileCount)
+		assert.Equal(t, 1, *subdir2.FileCount)
+	})
+
+	t.Run("depth below 1 is clamped to 1", func(t *testing.T) {
+		req := mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Arguments: map[string]interface{}{
+					"path":  tmpDir,
+					"depth": 0.0,
+				},
+			},
+		}
+
+		res, err := fsHandler.HandleTree(ctx, req)
+		require.NoError(t, err)
+		require.False(t, res.IsError)
+
+		textContent := res.Content[0].(mcp.TextContent)
+		assert.Contains(t, textContent.Text, "max depth: 1")
+		assert.Contains(t, textContent.Text, "file1.txt")
 	})
 
 	t.Run("tree of empty directory", func(t *testing.T) {
@@ -162,10 +271,7 @@ func TestHandleTree(t *testing.T) {
 		assert.Contains(t, textContent.Text, "Directory tree for")
 
 		// Parse JSON to verify it's a directory with no children
-		jsonStart := textContent.Text[strings.Index(textContent.Text, "{"):]
-		var tree FileNode
-		err = json.Unmarshal([]byte(jsonStart), &tree)
-		require.NoError(t, err)
+		tree := parseTree(t, textContent.Text)
 		assert.Equal(t, "directory", tree.Type)
 		assert.Equal(t, "emptydir", tree.Name)
 		assert.Nil(t, tree.Children)
