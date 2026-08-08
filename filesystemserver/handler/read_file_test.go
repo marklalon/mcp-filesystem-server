@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -46,8 +47,17 @@ func TestReadfile_Invalid(t *testing.T) {
 
 	result, err := handler.HandleReadFile(context.Background(), request)
 	require.NoError(t, err)
-	assert.True(t, result.IsError)
-	assert.Contains(t, fmt.Sprint(result.Content[0]), "no such file or directory")
+	require.True(t, result.IsError)
+
+	// The error wording differs across platforms: "no such file or directory"
+	// on Unix vs "cannot find the file specified" on Windows.
+	text := fmt.Sprint(result.Content[0])
+	lower := strings.ToLower(text)
+	assert.True(t,
+		strings.Contains(lower, "no such file") ||
+			strings.Contains(lower, "cannot find the file"),
+		"unexpected error message: %s", text,
+	)
 }
 
 func TestReadfile_NoAccess(t *testing.T) {

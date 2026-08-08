@@ -22,8 +22,14 @@ func TestSearchFiles_Pattern(t *testing.T) {
 	// - test.c
 
 	dir := t.TempDir()
+	// The handler reports resolved paths, so expand the 8.3 short names that
+	// t.TempDir() may hand back on Windows before building the expected paths.
+	resolvedDir, err := filepath.EvalSymlinks(dir)
+	require.NoError(t, err, "Failed to resolve symlinks for directory: %s", dir)
+	dir = resolvedDir
+
 	test_h := filepath.Join(dir, "test.h")
-	err := os.WriteFile(test_h, []byte("foo"), 0644)
+	err = os.WriteFile(test_h, []byte("foo"), 0644)
 	require.NoError(t, err)
 
 	test_c := filepath.Join(dir, "test.c")

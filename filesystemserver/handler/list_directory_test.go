@@ -14,6 +14,11 @@ import (
 func TestHandleListDirectory(t *testing.T) {
 	// Setup a temporary directory for the test
 	tmpDir := t.TempDir()
+	// The handler reports resolved paths, so expand the 8.3 short names that
+	// t.TempDir() may hand back on Windows before building the expected paths.
+	resolvedTmpDir, err := filepath.EvalSymlinks(tmpDir)
+	require.NoError(t, err, "Failed to resolve temp dir: %s", tmpDir)
+	tmpDir = resolvedTmpDir
 
 	// Create a handler with the temp dir as an allowed path
 	allowedDirs := resolveAllowedDirs(t, tmpDir)
