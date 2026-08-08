@@ -11,6 +11,12 @@ const (
 	MAX_SEARCH_RESULTS = 1000
 	// Maximum file size in bytes to search within (10MB)
 	MAX_SEARCHABLE_SIZE = 10 * 1024 * 1024
+	// Maximum length in bytes of a single line to search within (1MB). Files
+	// containing a longer line are skipped from that line on.
+	MAX_SEARCHABLE_LINE_SIZE = 1024 * 1024
+	// Maximum number of bytes kept on each side of a match when a matching line
+	// is stored (comfortably wider than the window used to display a match)
+	MAX_STORED_LINE_CONTEXT = 512
 )
 
 type FileInfo struct {

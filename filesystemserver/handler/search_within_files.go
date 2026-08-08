@@ -313,6 +313,22 @@ func snapToRuneEnd(s string, index int) int {
 	return index
 }
 
+// clipLineAroundMatch bounds how much of a matching line is kept in memory,
+// returning the clipped line and the match offsets within it. The window kept
+// here is much wider than the one used when formatting results, so clipping
+// never changes the reported output.
+func clipLineAroundMatch(line string, matchStart, matchEnd int) (string, int, int) {
+	start := snapToRuneStart(line, max(0, matchStart-MAX_STORED_LINE_CONTEXT))
+	end := snapToRuneEnd(line, min(len(line), matchEnd+MAX_STORED_LINE_CONTEXT))
+
+	if start == 0 && end == len(line) {
+		return line, matchStart, matchEnd
+	}
+
+	// Clone, since slicing alone would keep the whole line alive
+	return strings.Clone(line[start:end]), matchStart - start, matchEnd - start
+}
+
 // searchWithinFiles searches file contents for lines matching the given matcher
 func searchWithinFiles(
 	rootPath string, matcher lineMatcher, maxDepth int, maxResults int, fs *FilesystemHandler,
@@ -327,11 +343,6 @@ func searchWithinFiles(
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil // Skip errors and continue
-			}
-
-			// Check if we've reached the maximum number of results
-			if resultCount >= maxResults {
-				return filepath.SkipDir
 			}
 
 			// Try to validate path
@@ -380,8 +391,12 @@ func searchWithinFiles(
 			}
 			defer file.Close()
 
-			// Create a scanner to read the file line by line
+			// Create a scanner to read the file line by line. The default 64KB line
+			// limit makes the scanner fail on files such as minified sources or
+			// single-line JSON, silently skipping the rest of the file, so raise it
+			// to a bounded size. The buffer starts small and only grows as needed.
 			scanner := bufio.NewScanner(file)
+			scanner.Buffer(nil, MAX_SEARCHABLE_LINE_SIZE)
 			lineNum := 0
 
 			// Scan each line
@@ -391,6 +406,10 @@ func searchWithinFiles(
 
 				// Check if the line matches the pattern
 				if matchStart, matchEnd, ok := matcher.match(line); ok {
+					// Keep only a bounded window of the line, so that very long
+					// lines are not retained in full for every result
+					line, matchStart, matchEnd = clipLineAroundMatch(line, matchStart, matchEnd)
+
 					// Add to results
 					results = append(results, SearchResult{
 						FilePath:    validPath,
@@ -404,7 +423,7 @@ func searchWithinFiles(
 
 					// Check if we've reached the maximum results
 					if resultCount >= maxResults {
-						return filepath.SkipDir
+						return filepath.SkipAll
 					}
 				}
 			}

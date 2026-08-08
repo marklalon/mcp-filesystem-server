@@ -249,6 +249,69 @@ func TestSearchWithinFiles_TruncatesOnRuneBoundaries(t *testing.T) {
 	assert.Contains(t, text, want)
 }
 
+func TestSearchWithinFiles_LongLines(t *testing.T) {
+	dir := t.TempDir()
+
+	// Lines well past the scanner's default 64KB token limit
+	minified := strings.Repeat("x", 70000) + "NEEDLE" + strings.Repeat("y", 70000)
+	err := os.WriteFile(filepath.Join(dir, "minified.txt"), []byte(minified+"\n"), 0644)
+	require.NoError(t, err)
+
+	trailing := strings.Repeat("a", 70000) + "\nfindme\n"
+	err = os.WriteFile(filepath.Join(dir, "trailing.txt"), []byte(trailing), 0644)
+	require.NoError(t, err)
+
+	// A line past MAX_SEARCHABLE_LINE_SIZE, which the scanner cannot read
+	beyond := "beforehuge\n" + strings.Repeat("z", MAX_SEARCHABLE_LINE_SIZE+1) + "insidehuge\n"
+	err = os.WriteFile(filepath.Join(dir, "beyond.txt"), []byte(beyond), 0644)
+	require.NoError(t, err)
+
+	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	require.NoError(t, err)
+
+	t.Run("match on a long line", func(t *testing.T) {
+		result, text := callSearchWithinFiles(t, handler, map[string]any{
+			"path":      dir,
+			"substring": "NEEDLE",
+		})
+		assert.False(t, result.IsError)
+		assert.Contains(t, text, "Found 1 ")
+
+		// Only the context window around the match is reported
+		want := "..." + strings.Repeat("x", 30) + "NEEDLE" + strings.Repeat("y", 30) + "..."
+		assert.Contains(t, text, want)
+		assert.Less(t, len(text), 1000)
+	})
+
+	t.Run("long line does not hide the rest of the file", func(t *testing.T) {
+		result, text := callSearchWithinFiles(t, handler, map[string]any{
+			"path":      dir,
+			"substring": "findme",
+		})
+		assert.False(t, result.IsError)
+		assert.Contains(t, text, "Found 1 ")
+		assert.Contains(t, text, "Line 2: findme")
+	})
+
+	t.Run("line past the limit is skipped", func(t *testing.T) {
+		// Lines up to the over-long one are still searched
+		result, text := callSearchWithinFiles(t, handler, map[string]any{
+			"path":      dir,
+			"substring": "beforehuge",
+		})
+		assert.False(t, result.IsError)
+		assert.Contains(t, text, "Line 1: beforehuge")
+
+		// The over-long line itself is not
+		result, text = callSearchWithinFiles(t, handler, map[string]any{
+			"path":      dir,
+			"substring": "insidehuge",
+		})
+		assert.False(t, result.IsError)
+		assert.Contains(t, text, "No occurrences of 'insidehuge'")
+	})
+}
+
 func TestSearchWithinFiles_RegexRespectsLimits(t *testing.T) {
 	dir := t.TempDir()
 
