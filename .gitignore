@@ -5,5 +5,7 @@ dist/
 CLAUDE.md
 .claude/
 
+bin/
+
 # go build artifact
 mcp-filesystem-server
