@@ -64,7 +64,8 @@ This MCP server provides secure access to the local filesystem via the Model Con
 
 - **search_within_files**
   - Search for text within file contents across directory trees
-  - Parameters: `path` (required): Starting directory for the search, `substring` (required): Text to search for within file contents, `depth` (optional): Maximum directory depth to search, `max_results` (optional): Maximum number of results to return (default: 1000)
+  - Parameters: `path` (required): Starting directory for the search, `substring` (required): Text to search for within file contents, or a regular expression pattern when `regex` is true, `depth` (optional): Maximum directory depth to search, `max_results` (optional): Maximum number of results to return (default: 1000), `regex` (optional): Treat the pattern as a regular expression (default: false), `ignore_case` (optional): Match case-insensitively (default: false)
+  - Regex patterns use Go's [RE2 syntax](https://github.com/google/re2/wiki/Syntax) and are matched against one line at a time, so `^` and `$` anchor to line boundaries and a pattern cannot span multiple lines. Note that a pattern able to match an empty string (such as `a*`) matches every line.
 
 - **get_file_info**
   - Retrieve detailed metadata about a file or directory

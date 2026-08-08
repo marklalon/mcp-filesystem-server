@@ -6,10 +6,66 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// lineMatcher reports the byte range of the first match within a single line.
+type lineMatcher interface {
+	match(line string) (start, end int, ok bool)
+}
+
+// substringMatcher matches a literal, case-sensitive substring.
+type substringMatcher struct {
+	needle string
+}
+
+func (m substringMatcher) match(line string) (int, int, bool) {
+	index := strings.Index(line, m.needle)
+	if index < 0 {
+		return 0, 0, false
+	}
+	return index, index + len(m.needle), true
+}
+
+// regexMatcher matches a compiled regular expression.
+type regexMatcher struct {
+	re *regexp.Regexp
+}
+
+func (m regexMatcher) match(line string) (int, int, bool) {
+	loc := m.re.FindStringIndex(line)
+	if loc == nil {
+		return 0, 0, false
+	}
+	return loc[0], loc[1], true
+}
+
+// newLineMatcher builds a matcher for the given pattern. Case-insensitive literal
+// searches are handled by quoting the pattern and running it through the regexp
+// engine, which keeps match offsets aligned with the original line.
+func newLineMatcher(pattern string, useRegex, ignoreCase bool) (lineMatcher, error) {
+	if !useRegex && !ignoreCase {
+		return substringMatcher{needle: pattern}, nil
+	}
+
+	expr := pattern
+	if !useRegex {
+		expr = regexp.QuoteMeta(pattern)
+	}
+	if ignoreCase {
+		expr = "(?i)" + expr
+	}
+
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		return nil, err
+	}
+	return regexMatcher{re: re}, nil
+}
 
 func (fs *FilesystemHandler) HandleSearchWithinFiles(
 	ctx context.Context,
@@ -70,6 +126,32 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 		}
 	}
 
+	// Extract optional regex parameter
+	useRegex := false
+	if val, err := request.RequireBool("regex"); err == nil {
+		useRegex = val
+	}
+
+	// Extract optional ignore_case parameter
+	ignoreCase := false
+	if val, err := request.RequireBool("ignore_case"); err == nil {
+		ignoreCase = val
+	}
+
+	// Compile the pattern once, before touching the file system
+	matcher, err := newLineMatcher(substring, useRegex, ignoreCase)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error: Invalid regular expression: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+
 	// Handle empty or relative paths like "." or "./" by converting to absolute path
 	if path == "." || path == "./" {
 		// Get current working directory
@@ -128,7 +210,7 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 	}
 
 	// Perform the search
-	results, err := searchWithinFiles(validPath, substring, maxDepth, maxResults, fs)
+	results, err := searchWithinFiles(validPath, matcher, maxDepth, maxResults, fs)
 	if err != nil {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
@@ -141,12 +223,18 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 		}, nil
 	}
 
+	// Describe what was searched for, since the pattern may be a regex
+	matchTerm := "occurrences of"
+	if useRegex {
+		matchTerm = "matches for"
+	}
+
 	if len(results) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("No occurrences of '%s' found in files under %s", substring, path),
+					Text: fmt.Sprintf("No %s '%s' found in files under %s", matchTerm, substring, path),
 				},
 			},
 		}, nil
@@ -154,7 +242,7 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 
 	// Format search results
 	var formattedResults strings.Builder
-	formattedResults.WriteString(fmt.Sprintf("Found %d occurrences of '%s':\n\n", len(results), substring))
+	formattedResults.WriteString(fmt.Sprintf("Found %d %s '%s':\n\n", len(results), matchTerm, substring))
 
 	// Group results by file for easier readability
 	fileResultsMap := make(map[string][]SearchResult)
@@ -168,28 +256,7 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 		formattedResults.WriteString(fmt.Sprintf("File: %s (%s)\n", filePath, resourceURI))
 
 		for _, result := range fileResults {
-			// Truncate line content if too long (keeping context around the match)
-			lineContent := result.LineContent
-			if len(lineContent) > 100 {
-				// Find the substring position
-				substrPos := strings.Index(strings.ToLower(lineContent), strings.ToLower(substring))
-
-				// Calculate start and end positions for context
-				contextStart := max(0, substrPos-30)
-				contextEnd := min(len(lineContent), substrPos+len(substring)+30)
-
-				if contextStart > 0 {
-					lineContent = "..." + lineContent[contextStart:contextEnd]
-				} else {
-					lineContent = lineContent[:contextEnd]
-				}
-
-				if contextEnd < len(result.LineContent) {
-					lineContent += "..."
-				}
-			}
-
-			formattedResults.WriteString(fmt.Sprintf("  Line %d: %s\n", result.LineNumber, lineContent))
+			formattedResults.WriteString(fmt.Sprintf("  Line %d: %s\n", result.LineNumber, truncateAroundMatch(result)))
 		}
 		formattedResults.WriteString("\n")
 	}
@@ -209,9 +276,46 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 	}, nil
 }
 
-// searchWithinFiles searches for a substring within file contents
+// truncateAroundMatch shortens long lines, keeping context around the match.
+func truncateAroundMatch(result SearchResult) string {
+	line := result.LineContent
+	if len(line) <= 100 {
+		return line
+	}
+
+	// Keep the cut points on rune boundaries so multi-byte characters stay intact
+	contextStart := snapToRuneStart(line, max(0, result.MatchStart-30))
+	contextEnd := snapToRuneEnd(line, min(len(line), result.MatchEnd+30))
+
+	truncated := line[contextStart:contextEnd]
+	if contextStart > 0 {
+		truncated = "..." + truncated
+	}
+	if contextEnd < len(line) {
+		truncated += "..."
+	}
+	return truncated
+}
+
+// snapToRuneStart moves index back to the start of the rune it falls inside.
+func snapToRuneStart(s string, index int) int {
+	for index > 0 && !utf8.RuneStart(s[index]) {
+		index--
+	}
+	return index
+}
+
+// snapToRuneEnd moves index forward to the next rune boundary.
+func snapToRuneEnd(s string, index int) int {
+	for index < len(s) && !utf8.RuneStart(s[index]) {
+		index++
+	}
+	return index
+}
+
+// searchWithinFiles searches file contents for lines matching the given matcher
 func searchWithinFiles(
-	rootPath, substring string, maxDepth int, maxResults int, fs *FilesystemHandler,
+	rootPath string, matcher lineMatcher, maxDepth int, maxResults int, fs *FilesystemHandler,
 ) ([]SearchResult, error) {
 	var results []SearchResult
 	resultCount := 0
@@ -285,14 +389,16 @@ func searchWithinFiles(
 				lineNum++
 				line := scanner.Text()
 
-				// Check if the line contains the substring
-				if strings.Contains(line, substring) {
+				// Check if the line matches the pattern
+				if matchStart, matchEnd, ok := matcher.match(line); ok {
 					// Add to results
 					results = append(results, SearchResult{
 						FilePath:    validPath,
 						LineNumber:  lineNum,
 						LineContent: line,
 						ResourceURI: pathToResourceURI(validPath),
+						MatchStart:  matchStart,
+						MatchEnd:    matchEnd,
 					})
 					resultCount++
 

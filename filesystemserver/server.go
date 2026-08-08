@@ -190,7 +190,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 			mcp.Required(),
 		),
 		mcp.WithString("substring",
-			mcp.Description("Text to search for within file contents"),
+			mcp.Description("Text to search for within file contents, or a regular expression pattern when regex is true"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("depth",
@@ -198,6 +198,12 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		),
 		mcp.WithNumber("max_results",
 			mcp.Description("Maximum number of results to return (default: 1000)"),
+		),
+		mcp.WithBoolean("regex",
+			mcp.Description("Treat the search pattern as a regular expression (RE2 syntax, default: false). Patterns are matched against one line at a time, so '^' and '$' anchor to line boundaries and a pattern cannot span multiple lines. Note that a pattern able to match an empty string (such as 'a*') matches every line."),
+		),
+		mcp.WithBoolean("ignore_case",
+			mcp.Description("Match case-insensitively (default: false)"),
 		),
 	), h.HandleSearchWithinFiles)
 

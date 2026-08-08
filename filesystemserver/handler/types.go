@@ -39,4 +39,7 @@ type SearchResult struct {
 	LineNumber  int
 	LineContent string
 	ResourceURI string
+	// MatchStart and MatchEnd are the byte offsets of the match within LineContent.
+	MatchStart int
+	MatchEnd   int
 }
