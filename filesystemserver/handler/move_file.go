@@ -48,6 +48,28 @@ func (fs *FilesystemHandler) HandleMoveFile(
 			},
 			IsError: true,
 		}, nil
+	} else if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error accessing source: %v", err),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
+
+	if fs.shouldIgnoreDirName(filepath.Base(fs.resolvePath(destination))) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error with destination path: %v", fs.ignoredPathError(destination)),
+				},
+			},
+			IsError: true,
+		}, nil
 	}
 
 	// For destination path, validate the parent directory first and create it if

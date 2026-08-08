@@ -11,7 +11,6 @@ if errorlevel 1 (
     ) else (
         echo [ERROR] Go was not found.
         echo Please install Go and make sure it is available in PATH.
-        pause
         exit /b 1
     )
 )
@@ -37,11 +36,9 @@ if errorlevel 1 goto :failed
 echo.
 echo Build succeeded:
 echo %CD%\%OUTPUT%
-pause
 exit /b 0
 
 :failed
 echo.
 echo Build failed.
-pause
 exit /b 1

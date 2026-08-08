@@ -116,6 +116,25 @@ To serve a different directory, pass it as the single argument:
 mcp-filesystem-server /path/to/workspace/directory
 ```
 
+Directories can be denied with the repeatable `--ignore-dir` option. Its value
+is a glob matched against directory names at any depth. Multiple directory
+patterns can be combined with `|`:
+
+```bash
+# Deny access to one directory name
+mcp-filesystem-server /path/to/workspace/directory --ignore-dir .git
+
+# Combine multiple directory names in one argument
+mcp-filesystem-server /path/to/workspace/directory --ignore-dir '.archive|.chat'
+
+# Deny access to all hidden directories (quote the pattern so the shell does not expand it)
+mcp-filesystem-server --ignore-dir '.*' /path/to/workspace/directory
+```
+
+The `--ignore-directory` spelling is accepted as an alias. A matching
+directory and every path below it cannot be read or written, including when
+the path is requested explicitly.
+
 #### As a library in your Go project
 
 ```go
@@ -151,7 +170,13 @@ To integrate this server with apps that support MCP:
   "mcpServers": {
     "filesystem": {
       "command": "mcp-filesystem-server",
-      "args": ["/path/to/workspace/directory"]
+      "args": [
+        "/path/to/workspace/directory",
+        "--ignore-dir",
+        ".git",
+        "--ignore-dir",
+        ".vscode"
+      ]
     }
   }
 }
@@ -181,7 +206,9 @@ To integrate the Docker image with apps that support MCP:
         "-i",
         "--rm",
         "ghcr.io/mark3labs/mcp-filesystem-server:latest",
-        "/path/to/workspace/directory"
+        "/path/to/workspace/directory",
+        "--ignore-dir",
+        ".git"
       ]
     }
   }

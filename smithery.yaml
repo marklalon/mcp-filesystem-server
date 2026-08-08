@@ -13,9 +13,21 @@ startCommand:
         description: The absolute path to the single directory the filesystem
           server serves. All tool paths are relative to it. For example, in the
           Docker container '/app' is a good default.
+      ignoreDirectories:
+        type: array
+        items:
+          type: string
+        description: Optional glob patterns for directory names to deny, such
+          as '.*' or '.git'.
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
-    (config) => ({ command: './server', args: [config.workspaceDirectory] })
+    (config) => ({
+      command: './server',
+      args: [
+        config.workspaceDirectory,
+        ...(config.ignoreDirectories || []).flatMap((pattern) => ['--ignore-dir', pattern])
+      ]
+    })
   exampleConfig:
     workspaceDirectory: /app

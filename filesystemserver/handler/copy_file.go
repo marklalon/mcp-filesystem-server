@@ -75,6 +75,17 @@ func (fs *FilesystemHandler) HandleCopyFile(
 		}, nil
 	}
 	displayDest := fs.relPath(validDest)
+	if fs.shouldIgnoreDirName(filepath.Base(validDest)) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error with destination path: %v", fs.ignoredPathError(destination)),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
 
 	// Create parent directory for destination if it doesn't exist
 	destDir := filepath.Dir(validDest)
@@ -93,7 +104,7 @@ func (fs *FilesystemHandler) HandleCopyFile(
 	// Perform the copy operation based on whether source is a file or directory
 	if srcInfo.IsDir() {
 		// It's a directory, copy recursively
-		if err := copyDir(validSource, validDest); err != nil {
+		if err := copyDir(validSource, validDest, fs); err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
@@ -174,7 +185,7 @@ func copyFile(src, dst string) error {
 }
 
 // copyDir recursively copies a directory tree from src to dst
-func copyDir(src, dst string) error {
+func copyDir(src, dst string, fs *FilesystemHandler) error {
 	// Get properties of source dir
 	srcInfo, err := os.Stat(src)
 	if err != nil {
@@ -204,7 +215,10 @@ func copyDir(src, dst string) error {
 
 		// Recursively copy subdirectories or copy files
 		if entry.IsDir() {
-			if err = copyDir(srcPath, dstPath); err != nil {
+			if fs.shouldIgnoreDirName(entry.Name()) {
+				continue
+			}
+			if err = copyDir(srcPath, dstPath, fs); err != nil {
 				return err
 			}
 		} else {

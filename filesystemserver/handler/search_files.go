@@ -130,6 +130,10 @@ func searchFiles(rootPath, pattern string, fs *FilesystemHandler) ([]string, err
 				return nil // Skip errors and continue
 			}
 
+			if path != rootPath && info.IsDir() && fs.shouldIgnoreDirName(info.Name()) {
+				return filepath.SkipDir
+			}
+
 			// Try to validate path
 			if _, err := fs.validatePath(path); err != nil {
 				return nil // Skip invalid paths

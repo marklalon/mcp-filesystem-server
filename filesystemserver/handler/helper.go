@@ -88,6 +88,9 @@ func (fs *FilesystemHandler) validatePath(requestedPath string) (string, error) 
 				requestedPath,
 			)
 		}
+		if fs.pathContainsIgnoredDir(abs) || fs.pathContainsIgnoredDir(realParent) {
+			return "", fs.ignoredPathError(requestedPath)
+		}
 		return filepath.Join(realParent, filepath.Base(abs)), nil
 	}
 
@@ -97,6 +100,9 @@ func (fs *FilesystemHandler) validatePath(requestedPath string) (string, error) 
 			"access denied - path outside the allowed directory: %s",
 			requestedPath,
 		)
+	}
+	if fs.pathContainsIgnoredDir(abs) || fs.pathContainsIgnoredDir(realPath) {
+		return "", fs.ignoredPathError(requestedPath)
 	}
 
 	return realPath, nil

@@ -10,10 +10,12 @@ var Version = "dev"
 
 // NewFilesystemServer creates a server serving a single root directory. Every
 // path argument is interpreted relative to that directory, and every path the
-// server reports back is relative to it as well.
-func NewFilesystemServer(rootDir string) (*server.MCPServer, error) {
+// server reports back is relative to it as well. ignoredDirPatterns are glob
+// patterns matched against directory names; matching directories and all paths
+// below them are inaccessible.
+func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.MCPServer, error) {
 
-	h, err := handler.NewFilesystemHandler(rootDir)
+	h, err := handler.NewFilesystemHandler(rootDir, ignoredDirPatterns...)
 	if err != nil {
 		return nil, err
 	}

@@ -228,7 +228,11 @@ func (fs *FilesystemHandler) resolveTreeEntry(dir string, entry os.DirEntry, fol
 	entryPath := filepath.Join(dir, entry.Name())
 
 	if entry.Type()&os.ModeSymlink == 0 {
-		return entryPath, entry.IsDir(), true
+		isDir := entry.IsDir()
+		if isDir && fs.shouldIgnoreDirName(entry.Name()) {
+			return "", false, false
+		}
+		return entryPath, isDir, true
 	}
 
 	// Skip symlinks if not following them
@@ -253,6 +257,9 @@ func (fs *FilesystemHandler) resolveTreeEntry(dir string, entry os.DirEntry, fol
 	// inspected to know whether it counts as a file or a directory
 	linkInfo, err := os.Stat(linkDest)
 	if err != nil {
+		return "", false, false
+	}
+	if linkInfo.IsDir() && fs.shouldIgnoreDirName(entry.Name()) {
 		return "", false, false
 	}
 

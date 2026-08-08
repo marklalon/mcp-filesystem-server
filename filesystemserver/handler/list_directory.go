@@ -76,6 +76,10 @@ func (fs *FilesystemHandler) HandleListDirectory(
 	result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", displayPath))
 
 	for _, entry := range entries {
+		if entry.IsDir() && fs.shouldIgnoreDirName(entry.Name()) {
+			continue
+		}
+
 		entryPath := filepath.Join(validPath, entry.Name())
 		resourceURI := fs.pathToResourceURI(entryPath)
 

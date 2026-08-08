@@ -328,6 +328,10 @@ func searchWithinFiles(
 				return nil // Skip errors and continue
 			}
 
+			if path != rootPath && info.IsDir() && fs.shouldIgnoreDirName(info.Name()) {
+				return filepath.SkipDir
+			}
+
 			// Try to validate path
 			validPath, err := fs.validatePath(path)
 			if err != nil {

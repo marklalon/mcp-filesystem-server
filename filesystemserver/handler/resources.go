@@ -50,6 +50,10 @@ func (fs *FilesystemHandler) HandleReadResource(
 		result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", fs.relPath(validPath)))
 
 		for _, entry := range entries {
+			if entry.IsDir() && fs.shouldIgnoreDirName(entry.Name()) {
+				continue
+			}
+
 			entryPath := filepath.Join(validPath, entry.Name())
 			entryURI := fs.pathToResourceURI(entryPath)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -30,6 +31,17 @@ func (fs *FilesystemHandler) HandleCreateDirectory(
 		}, nil
 	}
 	displayPath := fs.relPath(validPath)
+	if fs.shouldIgnoreDirName(filepath.Base(validPath)) || fs.pathContainsIgnoredDir(validPath) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: fmt.Sprintf("Error: %v", fs.ignoredPathError(path)),
+				},
+			},
+			IsError: true,
+		}, nil
+	}
 
 	// Check if path already exists
 	if info, err := os.Stat(validPath); err == nil {
