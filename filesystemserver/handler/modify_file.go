@@ -42,25 +42,7 @@ func (fs *FilesystemHandler) HandleModifyFile(
 		useRegex = val
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
-	// Validate path is within allowed directories
+	// Validate path is within the allowed directory
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -73,6 +55,7 @@ func (fs *FilesystemHandler) HandleModifyFile(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	if info, err := os.Stat(validPath); err == nil && info.IsDir() {
@@ -93,7 +76,7 @@ func (fs *FilesystemHandler) HandleModifyFile(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Error: File not found: %s", path),
+					Text: fmt.Sprintf("Error: File not found: %s", displayPath),
 				},
 			},
 			IsError: true,
@@ -175,7 +158,7 @@ func (fs *FilesystemHandler) HandleModifyFile(
 	}
 
 	// Create response
-	resourceURI := pathToResourceURI(validPath)
+	resourceURI := fs.pathToResourceURI(validPath)
 
 	// Get file info for the response
 	info, err := os.Stat(validPath)
@@ -196,14 +179,14 @@ func (fs *FilesystemHandler) HandleModifyFile(
 			mcp.TextContent{
 				Type: "text",
 				Text: fmt.Sprintf("File modified successfully. Made %d replacement(s) in %s (file size: %d bytes)",
-					replacementCount, path, info.Size()),
+					replacementCount, displayPath, info.Size()),
 			},
 			mcp.EmbeddedResource{
 				Type: "resource",
 				Resource: mcp.TextResourceContents{
 					URI:      resourceURI,
 					MIMEType: "text/plain",
-					Text:     fmt.Sprintf("Modified file: %s (%d bytes)", validPath, info.Size()),
+					Text:     fmt.Sprintf("Modified file: %s (%d bytes)", displayPath, info.Size()),
 				},
 			},
 		},

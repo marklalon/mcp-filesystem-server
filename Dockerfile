@@ -22,6 +22,6 @@ WORKDIR /app
 # Copy the built binary from the builder stage
 COPY --from=builder /app/server ./
 
-# The container will by default pass '/app' as the allowed directory if no other command line arguments are provided
+# The container serves '/app' by default; pass a single directory to override it
 ENTRYPOINT ["./server"]
 CMD ["/app"]

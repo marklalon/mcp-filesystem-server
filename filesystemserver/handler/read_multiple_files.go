@@ -47,20 +47,6 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 	// Process each file
 	var results []mcp.Content
 	for _, path := range pathsSlice {
-		// Handle empty or relative paths like "." or "./" by converting to absolute path
-		if path == "." || path == "./" {
-			// Get current working directory
-			cwd, err := os.Getwd()
-			if err != nil {
-				results = append(results, mcp.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("Error resolving current directory for path '%s': %v", path, err),
-				})
-				continue
-			}
-			path = cwd
-		}
-
 		validPath, err := fs.validatePath(path)
 		if err != nil {
 			results = append(results, mcp.TextContent{
@@ -69,23 +55,24 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 			})
 			continue
 		}
+		displayPath := fs.relPath(validPath)
 
 		// Check if it's a directory
 		info, err := os.Stat(validPath)
 		if err != nil {
 			results = append(results, mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Error accessing '%s': %v", path, err),
+				Text: fmt.Sprintf("Error accessing '%s': %v", displayPath, err),
 			})
 			continue
 		}
 
 		if info.IsDir() {
 			// For directories, return a resource reference instead
-			resourceURI := pathToResourceURI(validPath)
+			resourceURI := fs.pathToResourceURI(validPath)
 			results = append(results, mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("'%s' is a directory. Use list_directory tool or resource URI: %s", path, resourceURI),
+				Text: fmt.Sprintf("'%s' is a directory. Use list_directory tool or resource URI: %s", displayPath, resourceURI),
 			})
 			continue
 		}
@@ -96,11 +83,11 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 		// Check file size
 		if info.Size() > MAX_INLINE_SIZE {
 			// File is too large to inline, return a resource reference
-			resourceURI := pathToResourceURI(validPath)
+			resourceURI := fs.pathToResourceURI(validPath)
 			results = append(results, mcp.TextContent{
 				Type: "text",
 				Text: fmt.Sprintf("File '%s' is too large to display inline (%d bytes). Access it via resource URI: %s",
-					path, info.Size(), resourceURI),
+					displayPath, info.Size(), resourceURI),
 			})
 			continue
 		}
@@ -110,7 +97,7 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 		if err != nil {
 			results = append(results, mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Error reading file '%s': %v", path, err),
+				Text: fmt.Sprintf("Error reading file '%s': %v", displayPath, err),
 			})
 			continue
 		}
@@ -118,7 +105,7 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 		// Add file header
 		results = append(results, mcp.TextContent{
 			Type: "text",
-			Text: fmt.Sprintf("--- File: %s ---", path),
+			Text: fmt.Sprintf("--- File: %s ---", displayPath),
 		})
 
 		// Check if it's a text file
@@ -133,7 +120,7 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 			if info.Size() <= MAX_BASE64_SIZE {
 				results = append(results, mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Image file: %s (%s, %d bytes)", path, mimeType, info.Size()),
+					Text: fmt.Sprintf("Image file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 				})
 				results = append(results, mcp.ImageContent{
 					Type:     "image",
@@ -142,22 +129,22 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 				})
 			} else {
 				// Too large for base64, return a reference
-				resourceURI := pathToResourceURI(validPath)
+				resourceURI := fs.pathToResourceURI(validPath)
 				results = append(results, mcp.TextContent{
 					Type: "text",
 					Text: fmt.Sprintf("Image file '%s' is too large to display inline (%d bytes). Access it via resource URI: %s",
-						path, info.Size(), resourceURI),
+						displayPath, info.Size(), resourceURI),
 				})
 			}
 		} else {
 			// It's another type of binary file
-			resourceURI := pathToResourceURI(validPath)
+			resourceURI := fs.pathToResourceURI(validPath)
 
 			if info.Size() <= MAX_BASE64_SIZE {
 				// Small enough for base64 encoding
 				results = append(results, mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Binary file: %s (%s, %d bytes)", path, mimeType, info.Size()),
+					Text: fmt.Sprintf("Binary file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 				})
 				results = append(results, mcp.EmbeddedResource{
 					Type: "resource",
@@ -172,7 +159,7 @@ func (fs *FilesystemHandler) HandleReadMultipleFiles(
 				results = append(results, mcp.TextContent{
 					Type: "text",
 					Text: fmt.Sprintf("Binary file '%s' (%s, %d bytes). Access it via resource URI: %s",
-						path, mimeType, info.Size(), resourceURI),
+						displayPath, mimeType, info.Size(), resourceURI),
 				})
 			}
 		}

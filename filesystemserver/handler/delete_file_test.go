@@ -15,9 +15,8 @@ func TestHandleDeleteFile(t *testing.T) {
 	// Setup a temporary directory for the test
 	tmpDir := t.TempDir()
 
-	// Create a handler with the temp dir as an allowed path
-	allowedDirs := resolveAllowedDirs(t, tmpDir)
-	fsHandler, err := NewFilesystemHandler(allowedDirs)
+	// Create a handler rooted at the temp dir
+	fsHandler, err := NewFilesystemHandler(tmpDir)
 	require.NoError(t, err)
 
 	ctx := context.Background()

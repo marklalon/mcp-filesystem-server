@@ -19,24 +19,6 @@ func (fs *FilesystemHandler) HandleTree(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	// Extract depth parameter (optional, default: 3)
 	depth := 3 // Default value
 	if depthParam, err := request.RequireFloat("depth"); err == nil {
@@ -62,6 +44,7 @@ func (fs *FilesystemHandler) HandleTree(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	info, err := os.Stat(validPath)
@@ -118,14 +101,14 @@ func (fs *FilesystemHandler) HandleTree(
 	}
 
 	// Create resource URI for the directory
-	resourceURI := pathToResourceURI(validPath)
+	resourceURI := fs.pathToResourceURI(validPath)
 
 	// Return the result
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Directory tree for %s (max depth: %d):\n\n%s", validPath, depth, string(jsonData)),
+				Text: fmt.Sprintf("Directory tree for %s (max depth: %d):\n\n%s", displayPath, depth, string(jsonData)),
 			},
 			mcp.EmbeddedResource{
 				Type: "resource",
@@ -156,7 +139,7 @@ func (fs *FilesystemHandler) buildTree(path string, maxDepth int, currentDepth i
 	// Create the node
 	node := &FileNode{
 		Name:     filepath.Base(validPath),
-		Path:     validPath,
+		Path:     fs.relPath(validPath),
 		Modified: info.ModTime(),
 	}
 
@@ -190,9 +173,9 @@ func (fs *FilesystemHandler) buildTree(path string, maxDepth int, currentDepth i
 						continue
 					}
 
-					// Validate the symlink destination is within allowed directories
-					if !fs.isPathInAllowedDirs(linkDest) {
-						// Skip symlinks pointing outside allowed directories
+					// Validate the symlink destination is within the root directory
+					if !fs.isPathInRoot(linkDest) {
+						// Skip symlinks pointing outside the root directory
 						continue
 					}
 

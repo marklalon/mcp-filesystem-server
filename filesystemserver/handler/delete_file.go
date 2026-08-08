@@ -17,24 +17,6 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -47,6 +29,7 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if path exists
 	info, err := os.Stat(validPath)
@@ -55,7 +38,7 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Error: Path does not exist: %s", path),
+					Text: fmt.Sprintf("Error: Path does not exist: %s", displayPath),
 				},
 			},
 			IsError: true,
@@ -85,7 +68,7 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 				Content: []mcp.Content{
 					mcp.TextContent{
 						Type: "text",
-						Text: fmt.Sprintf("Error: %s is a directory. Use recursive=true to delete directories.", path),
+						Text: fmt.Sprintf("Error: %s is a directory. Use recursive=true to delete directories.", displayPath),
 					},
 				},
 				IsError: true,
@@ -109,7 +92,7 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Successfully deleted directory %s", path),
+					Text: fmt.Sprintf("Successfully deleted directory %s", displayPath),
 				},
 			},
 		}, nil
@@ -132,7 +115,7 @@ func (fs *FilesystemHandler) HandleDeleteFile(
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully deleted file %s", path),
+				Text: fmt.Sprintf("Successfully deleted file %s", displayPath),
 			},
 		},
 	}, nil

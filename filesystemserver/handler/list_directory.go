@@ -19,24 +19,6 @@ func (fs *FilesystemHandler) HandleListDirectory(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -49,6 +31,7 @@ func (fs *FilesystemHandler) HandleListDirectory(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	info, err := os.Stat(validPath)
@@ -90,11 +73,11 @@ func (fs *FilesystemHandler) HandleListDirectory(
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", validPath))
+	result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", displayPath))
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(validPath, entry.Name())
-		resourceURI := pathToResourceURI(entryPath)
+		resourceURI := fs.pathToResourceURI(entryPath)
 
 		if entry.IsDir() {
 			result.WriteString(fmt.Sprintf("[DIR]  %s (%s)\n", entry.Name(), resourceURI))
@@ -110,7 +93,7 @@ func (fs *FilesystemHandler) HandleListDirectory(
 	}
 
 	// Return both text content and embedded resource
-	resourceURI := pathToResourceURI(validPath)
+	resourceURI := fs.pathToResourceURI(validPath)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
@@ -122,7 +105,7 @@ func (fs *FilesystemHandler) HandleListDirectory(
 				Resource: mcp.TextResourceContents{
 					URI:      resourceURI,
 					MIMEType: "text/plain",
-					Text:     fmt.Sprintf("Directory: %s", validPath),
+					Text:     fmt.Sprintf("Directory: %s", displayPath),
 				},
 			},
 		},

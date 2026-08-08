@@ -152,24 +152,6 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 		}, nil
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -182,6 +164,7 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if the path is a directory
 	info, err := os.Stat(validPath)
@@ -234,7 +217,7 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("No %s '%s' found in files under %s", matchTerm, substring, path),
+					Text: fmt.Sprintf("No %s '%s' found in files under %s", matchTerm, substring, displayPath),
 				},
 			},
 		}, nil
@@ -252,8 +235,8 @@ func (fs *FilesystemHandler) HandleSearchWithinFiles(
 
 	// Display results grouped by file
 	for filePath, fileResults := range fileResultsMap {
-		resourceURI := pathToResourceURI(filePath)
-		formattedResults.WriteString(fmt.Sprintf("File: %s (%s)\n", filePath, resourceURI))
+		resourceURI := fs.pathToResourceURI(filePath)
+		formattedResults.WriteString(fmt.Sprintf("File: %s (%s)\n", fs.relPath(filePath), resourceURI))
 
 		for _, result := range fileResults {
 			formattedResults.WriteString(fmt.Sprintf("  Line %d: %s\n", result.LineNumber, truncateAroundMatch(result)))
@@ -415,7 +398,7 @@ func searchWithinFiles(
 						FilePath:    validPath,
 						LineNumber:  lineNum,
 						LineContent: line,
-						ResourceURI: pathToResourceURI(validPath),
+						ResourceURI: fs.pathToResourceURI(validPath),
 						MatchStart:  matchStart,
 						MatchEnd:    matchEnd,
 					})

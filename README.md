@@ -2,6 +2,11 @@
 
 This MCP server provides secure access to the local filesystem via the Model Context Protocol (MCP).
 
+The server serves exactly one directory, the workspace directory. Every path argument is interpreted
+relative to it, and every path the server reports back is relative to it as well, using forward
+slashes on every platform. The workspace directory itself is `.`. Absolute paths are still accepted
+as arguments, but are rejected if they fall outside the workspace directory.
+
 ## Components
 
 ### Resources
@@ -74,13 +79,10 @@ This MCP server provides secure access to the local filesystem via the Model Con
   - Retrieve detailed metadata about a file or directory
   - Parameters: `path` (required): Path to the file or directory
 
-- **list_allowed_directories**
-  - Returns the list of directories that this server is allowed to access
-  - Parameters: None
-
 ## Features
 
-- Secure access to specified directories
+- Secure access to a single workspace directory
+- Relative paths in and out, so absolute paths never leak into results
 - Path validation to prevent directory traversal attacks
 - Symlink resolution with security checks
 - MIME type detection
@@ -101,10 +103,16 @@ go install github.com/mark3labs/mcp-filesystem-server@latest
 
 #### As a standalone server
 
-Start the MCP server with allowed directories:
+Start the MCP server. It serves the current working directory by default:
 
 ```bash
-mcp-filesystem-server /path/to/allowed/directory [/another/allowed/directory ...]
+mcp-filesystem-server
+```
+
+To serve a different directory, pass it as the single argument:
+
+```bash
+mcp-filesystem-server /path/to/workspace/directory
 ```
 
 #### As a library in your Go project
@@ -120,9 +128,8 @@ import (
 )
 
 func main() {
-	// Create a new filesystem server with allowed directories
-	allowedDirs := []string{"/path/to/allowed/directory", "/another/allowed/directory"}
-	fs, err := filesystemserver.NewFilesystemServer(allowedDirs)
+	// Create a new filesystem server rooted at the workspace directory
+	fs, err := filesystemserver.NewFilesystemServer("/path/to/workspace/directory")
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
@@ -143,7 +150,7 @@ To integrate this server with apps that support MCP:
   "mcpServers": {
     "filesystem": {
       "command": "mcp-filesystem-server",
-      "args": ["/path/to/allowed/directory", "/another/allowed/directory"]
+      "args": ["/path/to/workspace/directory"]
     }
   }
 }
@@ -156,7 +163,7 @@ To integrate this server with apps that support MCP:
 You can run the Filesystem MCP server using Docker:
 
 ```bash
-docker run -i --rm ghcr.io/mark3labs/mcp-filesystem-server:latest /path/to/allowed/directory
+docker run -i --rm ghcr.io/mark3labs/mcp-filesystem-server:latest /path/to/workspace/directory
 ```
 
 #### Docker Configuration with MCP
@@ -173,7 +180,7 @@ To integrate the Docker image with apps that support MCP:
         "-i",
         "--rm",
         "ghcr.io/mark3labs/mcp-filesystem-server:latest",
-        "/path/to/allowed/directory"
+        "/path/to/workspace/directory"
       ]
     }
   }
@@ -191,9 +198,9 @@ If you need changes made inside the container to reflect on the host filesystem,
         "run",
         "-i",
         "--rm",
-        "--volume=/allowed/directory/in/host:/allowed/directory/in/container",
+        "--volume=/workspace/directory/in/host:/workspace/directory/in/container",
         "ghcr.io/mark3labs/mcp-filesystem-server:latest",
-        "/allowed/directory/in/container"
+        "/workspace/directory/in/container"
       ]
     }
   }

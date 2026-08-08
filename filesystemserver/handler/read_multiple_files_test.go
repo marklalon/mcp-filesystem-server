@@ -16,27 +16,27 @@ func TestHandleReadMultipleFiles(t *testing.T) {
 	// Setup a temporary directory for the test
 	tmpDir := t.TempDir()
 
-	// Create a handler with the temp dir as an allowed path
-	allowedDirs := resolveAllowedDirs(t, tmpDir)
-	fsHandler, err := NewFilesystemHandler(allowedDirs)
+	// Create a handler rooted at the temp dir
+	fsHandler, err := NewFilesystemHandler(tmpDir)
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
-	// Create test files
-	file1Path := filepath.Join(tmpDir, "file1.txt")
+	// Create test files. Paths are given to the tool relative to the root
+	// directory, which is also how it reports them back.
+	file1Path := "file1.txt"
 	file1Content := "This is the content of file 1"
-	err = os.WriteFile(file1Path, []byte(file1Content), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, file1Path), []byte(file1Content), 0644)
 	require.NoError(t, err)
 
-	file2Path := filepath.Join(tmpDir, "file2.txt")
+	file2Path := "file2.txt"
 	file2Content := "This is the content of file 2"
-	err = os.WriteFile(file2Path, []byte(file2Content), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, file2Path), []byte(file2Content), 0644)
 	require.NoError(t, err)
 
 	// Create a directory
-	dirPath := filepath.Join(tmpDir, "test_directory")
-	err = os.Mkdir(dirPath, 0755)
+	dirPath := "test_directory"
+	err = os.Mkdir(filepath.Join(tmpDir, dirPath), 0755)
 	require.NoError(t, err)
 
 	t.Run("read multiple text files", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestHandleReadMultipleFiles(t *testing.T) {
 	})
 
 	t.Run("try to read non-existent file", func(t *testing.T) {
-		nonExistentPath := filepath.Join(tmpDir, "non_existent.txt")
+		nonExistentPath := "non_existent.txt"
 
 		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
@@ -141,7 +141,7 @@ func TestHandleReadMultipleFiles(t *testing.T) {
 	})
 
 	t.Run("mix of valid and invalid files", func(t *testing.T) {
-		nonExistentPath := filepath.Join(tmpDir, "non_existent.txt")
+		nonExistentPath := "non_existent.txt"
 
 		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{

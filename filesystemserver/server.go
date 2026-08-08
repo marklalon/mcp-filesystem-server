@@ -8,9 +8,12 @@ import (
 
 var Version = "dev"
 
-func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
+// NewFilesystemServer creates a server serving a single root directory. Every
+// path argument is interpreted relative to that directory, and every path the
+// server reports back is relative to it as well.
+func NewFilesystemServer(rootDir string) (*server.MCPServer, error) {
 
-	h, err := handler.NewFilesystemHandler(allowedDirs)
+	h, err := handler.NewFilesystemHandler(rootDir)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +36,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"read_file",
 		mcp.WithDescription("Read the contents of a file from the file system. Reads the complete file by default, or a range of lines when start_line and/or end_line are given."),
 		mcp.WithString("path",
-			mcp.Description("Path to the file to read"),
+			mcp.Description("Path to the file to read, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("start_line",
@@ -48,7 +51,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"write_file",
 		mcp.WithDescription("Create a new file or overwrite an existing file with new content."),
 		mcp.WithString("path",
-			mcp.Description("Path where to write the file"),
+			mcp.Description("Path where to write the file, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithString("content",
@@ -61,7 +64,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"list_directory",
 		mcp.WithDescription("Get a detailed listing of all files and directories in a specified path."),
 		mcp.WithString("path",
-			mcp.Description("Path of the directory to list"),
+			mcp.Description("Path of the directory to list, relative to the workspace directory"),
 			mcp.Required(),
 		),
 	), h.HandleListDirectory)
@@ -70,7 +73,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"create_directory",
 		mcp.WithDescription("Create a new directory or ensure a directory exists."),
 		mcp.WithString("path",
-			mcp.Description("Path of the directory to create"),
+			mcp.Description("Path of the directory to create, relative to the workspace directory"),
 			mcp.Required(),
 		),
 	), h.HandleCreateDirectory)
@@ -79,11 +82,11 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"copy_file",
 		mcp.WithDescription("Copy files and directories."),
 		mcp.WithString("source",
-			mcp.Description("Source path of the file or directory"),
+			mcp.Description("Source path of the file or directory, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithString("destination",
-			mcp.Description("Destination path"),
+			mcp.Description("Destination path, relative to the workspace directory"),
 			mcp.Required(),
 		),
 	), h.HandleCopyFile)
@@ -92,11 +95,11 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"move_file",
 		mcp.WithDescription("Move or rename files and directories."),
 		mcp.WithString("source",
-			mcp.Description("Source path of the file or directory"),
+			mcp.Description("Source path of the file or directory, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithString("destination",
-			mcp.Description("Destination path"),
+			mcp.Description("Destination path, relative to the workspace directory"),
 			mcp.Required(),
 		),
 	), h.HandleMoveFile)
@@ -105,7 +108,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"search_files",
 		mcp.WithDescription("Recursively search for files and directories matching a pattern."),
 		mcp.WithString("path",
-			mcp.Description("Starting path for the search"),
+			mcp.Description("Starting path for the search, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithString("pattern",
@@ -118,21 +121,16 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"get_file_info",
 		mcp.WithDescription("Retrieve detailed metadata about a file or directory."),
 		mcp.WithString("path",
-			mcp.Description("Path to the file or directory"),
+			mcp.Description("Path to the file or directory, relative to the workspace directory"),
 			mcp.Required(),
 		),
 	), h.HandleGetFileInfo)
 
 	s.AddTool(mcp.NewTool(
-		"list_allowed_directories",
-		mcp.WithDescription("Returns the list of directories that this server is allowed to access."),
-	), h.HandleListAllowedDirectories)
-
-	s.AddTool(mcp.NewTool(
 		"read_multiple_files",
 		mcp.WithDescription("Read the contents of multiple files in a single operation."),
 		mcp.WithArray("paths",
-			mcp.Description("List of file paths to read"),
+			mcp.Description("List of file paths to read, each relative to the workspace directory"),
 			mcp.Required(),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
@@ -142,7 +140,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"tree",
 		mcp.WithDescription("Returns a hierarchical JSON representation of a directory structure."),
 		mcp.WithString("path",
-			mcp.Description("Path of the directory to traverse"),
+			mcp.Description("Path of the directory to traverse, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithNumber("depth",
@@ -157,7 +155,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"delete_file",
 		mcp.WithDescription("Delete a file or directory from the file system."),
 		mcp.WithString("path",
-			mcp.Description("Path to the file or directory to delete"),
+			mcp.Description("Path to the file or directory to delete, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithBoolean("recursive",
@@ -169,7 +167,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"modify_file",
 		mcp.WithDescription("Update file by finding and replacing text. Provides a simple pattern matching interface without needing exact character positions."),
 		mcp.WithString("path",
-			mcp.Description("Path to the file to modify"),
+			mcp.Description("Path to the file to modify, relative to the workspace directory"),
 			mcp.Required(),
 		),
 		mcp.WithString("find",
@@ -192,7 +190,7 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 		"search_within_files",
 		mcp.WithDescription("Search for text within file contents. Unlike search_files which only searches file names, this tool scans the actual contents of text files for matching substrings. Binary files are automatically excluded from the search. Reports file paths and line numbers where matches are found."),
 		mcp.WithString("path",
-			mcp.Description("Starting path for the search (must be a directory)"),
+			mcp.Description("Starting path for the search, relative to the workspace directory (must be a directory)"),
 			mcp.Required(),
 		),
 		mcp.WithString("substring",

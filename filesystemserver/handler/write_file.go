@@ -22,24 +22,6 @@ func (fs *FilesystemHandler) HandleWriteFile(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -52,6 +34,7 @@ func (fs *FilesystemHandler) HandleWriteFile(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	if info, err := os.Stat(validPath); err == nil && info.IsDir() {
@@ -100,25 +83,25 @@ func (fs *FilesystemHandler) HandleWriteFile(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Successfully wrote to %s", path),
+					Text: fmt.Sprintf("Successfully wrote to %s", displayPath),
 				},
 			},
 		}, nil
 	}
 
-	resourceURI := pathToResourceURI(validPath)
+	resourceURI := fs.pathToResourceURI(validPath)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Successfully wrote %d bytes to %s", info.Size(), path),
+				Text: fmt.Sprintf("Successfully wrote %d bytes to %s", info.Size(), displayPath),
 			},
 			mcp.EmbeddedResource{
 				Type: "resource",
 				Resource: mcp.TextResourceContents{
 					URI:      resourceURI,
 					MIMEType: "text/plain",
-					Text:     fmt.Sprintf("File: %s (%d bytes)", validPath, info.Size()),
+					Text:     fmt.Sprintf("File: %s (%d bytes)", displayPath, info.Size()),
 				},
 			},
 		},

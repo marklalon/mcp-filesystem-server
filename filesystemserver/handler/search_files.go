@@ -24,24 +24,6 @@ func (fs *FilesystemHandler) HandleSearchFiles(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -54,6 +36,7 @@ func (fs *FilesystemHandler) HandleSearchFiles(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	info, err := os.Stat(validPath)
@@ -100,7 +83,7 @@ func (fs *FilesystemHandler) HandleSearchFiles(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("No files found matching pattern '%s' in %s", pattern, path),
+					Text: fmt.Sprintf("No files found matching pattern '%s' in %s", pattern, displayPath),
 				},
 			},
 		}, nil
@@ -111,17 +94,18 @@ func (fs *FilesystemHandler) HandleSearchFiles(
 	formattedResults.WriteString(fmt.Sprintf("Found %d results:\n\n", len(results)))
 
 	for _, result := range results {
-		resourceURI := pathToResourceURI(result)
+		resourceURI := fs.pathToResourceURI(result)
+		displayResult := fs.relPath(result)
 		info, err := os.Stat(result)
 		if err == nil {
 			if info.IsDir() {
-				formattedResults.WriteString(fmt.Sprintf("[DIR]  %s (%s)\n", result, resourceURI))
+				formattedResults.WriteString(fmt.Sprintf("[DIR]  %s (%s)\n", displayResult, resourceURI))
 			} else {
 				formattedResults.WriteString(fmt.Sprintf("[FILE] %s (%s) - %d bytes\n",
-					result, resourceURI, info.Size()))
+					displayResult, resourceURI, info.Size()))
 			}
 		} else {
-			formattedResults.WriteString(fmt.Sprintf("%s (%s)\n", result, resourceURI))
+			formattedResults.WriteString(fmt.Sprintf("%s (%s)\n", displayResult, resourceURI))
 		}
 	}
 

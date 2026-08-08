@@ -9,7 +9,7 @@ import (
 )
 
 func TestInProcess(t *testing.T) {
-	fss, err := filesystemserver.NewFilesystemServer([]string{"."})
+	fss, err := filesystemserver.NewFilesystemServer(".")
 	require.NoError(t, err)
 
 	mcpClient := startTestClient(t, fss)

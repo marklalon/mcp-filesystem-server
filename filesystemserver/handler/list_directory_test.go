@@ -14,15 +14,9 @@ import (
 func TestHandleListDirectory(t *testing.T) {
 	// Setup a temporary directory for the test
 	tmpDir := t.TempDir()
-	// The handler reports resolved paths, so expand the 8.3 short names that
-	// t.TempDir() may hand back on Windows before building the expected paths.
-	resolvedTmpDir, err := filepath.EvalSymlinks(tmpDir)
-	require.NoError(t, err, "Failed to resolve temp dir: %s", tmpDir)
-	tmpDir = resolvedTmpDir
 
-	// Create a handler with the temp dir as an allowed path
-	allowedDirs := resolveAllowedDirs(t, tmpDir)
-	fsHandler, err := NewFilesystemHandler(allowedDirs)
+	// Create a handler rooted at the temp dir
+	fsHandler, err := NewFilesystemHandler(tmpDir)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -52,8 +46,9 @@ func TestHandleListDirectory(t *testing.T) {
 		// Verify the response contains directory listing
 		require.Len(t, res.Content, 2)
 		textContent := res.Content[0].(mcp.TextContent)
-		assert.Contains(t, textContent.Text, "Directory listing for:")
-		assert.Contains(t, textContent.Text, tmpDir)
+		// The root directory is reported as "." and never as an absolute path
+		assert.Contains(t, textContent.Text, "Directory listing for: .\n")
+		assert.NotContains(t, textContent.Text, tmpDir)
 		assert.Contains(t, textContent.Text, "[DIR]  subdirectory")
 		assert.Contains(t, textContent.Text, "[FILE] test_file.txt")
 		assert.Contains(t, textContent.Text, "11 bytes") // Length of "hello world"
@@ -64,15 +59,14 @@ func TestHandleListDirectory(t *testing.T) {
 		assert.Equal(t, "resource", embeddedResource.Type)
 	})
 
-	t.Run("list empty directory", func(t *testing.T) {
-		emptyDir := filepath.Join(tmpDir, "empty_directory")
-		err := os.Mkdir(emptyDir, 0755)
+	t.Run("list empty directory by relative path", func(t *testing.T) {
+		err := os.Mkdir(filepath.Join(tmpDir, "empty_directory"), 0755)
 		require.NoError(t, err)
 
 		req := mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
 				Arguments: map[string]interface{}{
-					"path": emptyDir,
+					"path": "empty_directory",
 				},
 			},
 		}
@@ -84,8 +78,7 @@ func TestHandleListDirectory(t *testing.T) {
 		// Verify the response contains directory listing for empty directory
 		require.Len(t, res.Content, 2)
 		textContent := res.Content[0].(mcp.TextContent)
-		assert.Contains(t, textContent.Text, "Directory listing for:")
-		assert.Contains(t, textContent.Text, emptyDir)
+		assert.Contains(t, textContent.Text, "Directory listing for: empty_directory\n")
 	})
 
 	t.Run("try to list a file instead of directory", func(t *testing.T) {

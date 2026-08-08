@@ -106,24 +106,6 @@ func (fs *FilesystemHandler) HandleReadFile(
 		}
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -136,6 +118,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	// Check if it's a directory
 	info, err := os.Stat(validPath)
@@ -153,7 +136,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 
 	if info.IsDir() {
 		// For directories, return a resource reference instead
-		resourceURI := pathToResourceURI(validPath)
+		resourceURI := fs.pathToResourceURI(validPath)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
@@ -165,7 +148,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 					Resource: mcp.TextResourceContents{
 						URI:      resourceURI,
 						MIMEType: "text/plain",
-						Text:     fmt.Sprintf("Directory: %s", validPath),
+						Text:     fmt.Sprintf("Directory: %s", displayPath),
 					},
 				},
 			},
@@ -183,7 +166,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 				Content: []mcp.Content{
 					mcp.TextContent{
 						Type: "text",
-						Text: fmt.Sprintf("Error: start_line/end_line are only supported for text files, but %s was detected as %s", validPath, mimeType),
+						Text: fmt.Sprintf("Error: start_line/end_line are only supported for text files, but %s was detected as %s", displayPath, mimeType),
 					},
 				},
 				IsError: true,
@@ -202,7 +185,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 					Content: []mcp.Content{
 						mcp.TextContent{
 							Type: "text",
-							Text: fmt.Sprintf("Requested line range is too large to display inline (over %d bytes). Request fewer lines, or access the file via resource URI: %s", MAX_INLINE_SIZE, pathToResourceURI(validPath)),
+							Text: fmt.Sprintf("Requested line range is too large to display inline (over %d bytes). Request fewer lines, or access the file via resource URI: %s", MAX_INLINE_SIZE, fs.pathToResourceURI(validPath)),
 						},
 					},
 					IsError: true,
@@ -244,7 +227,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 	// Check file size
 	if info.Size() > MAX_INLINE_SIZE {
 		// File is too large to inline, return a resource reference
-		resourceURI := pathToResourceURI(validPath)
+		resourceURI := fs.pathToResourceURI(validPath)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
@@ -256,7 +239,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 					Resource: mcp.TextResourceContents{
 						URI:      resourceURI,
 						MIMEType: "text/plain",
-						Text:     fmt.Sprintf("Large file: %s (%s, %d bytes)", validPath, mimeType, info.Size()),
+						Text:     fmt.Sprintf("Large file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 					},
 				},
 			},
@@ -295,7 +278,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 				Content: []mcp.Content{
 					mcp.TextContent{
 						Type: "text",
-						Text: fmt.Sprintf("Image file: %s (%s, %d bytes)", validPath, mimeType, info.Size()),
+						Text: fmt.Sprintf("Image file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 					},
 					mcp.ImageContent{
 						Type:     "image",
@@ -306,7 +289,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 			}, nil
 		} else {
 			// Too large for base64, return a reference
-			resourceURI := pathToResourceURI(validPath)
+			resourceURI := fs.pathToResourceURI(validPath)
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{
 					mcp.TextContent{
@@ -318,7 +301,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 						Resource: mcp.TextResourceContents{
 							URI:      resourceURI,
 							MIMEType: "text/plain",
-							Text:     fmt.Sprintf("Large image: %s (%s, %d bytes)", validPath, mimeType, info.Size()),
+							Text:     fmt.Sprintf("Large image: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 						},
 					},
 				},
@@ -326,7 +309,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 		}
 	} else {
 		// It's another type of binary file
-		resourceURI := pathToResourceURI(validPath)
+		resourceURI := fs.pathToResourceURI(validPath)
 
 		if info.Size() <= MAX_BASE64_SIZE {
 			// Small enough for base64 encoding
@@ -334,7 +317,7 @@ func (fs *FilesystemHandler) HandleReadFile(
 				Content: []mcp.Content{
 					mcp.TextContent{
 						Type: "text",
-						Text: fmt.Sprintf("Binary file: %s (%s, %d bytes)", validPath, mimeType, info.Size()),
+						Text: fmt.Sprintf("Binary file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 					},
 					mcp.EmbeddedResource{
 						Type: "resource",
@@ -352,14 +335,14 @@ func (fs *FilesystemHandler) HandleReadFile(
 				Content: []mcp.Content{
 					mcp.TextContent{
 						Type: "text",
-						Text: fmt.Sprintf("Binary file: %s (%s, %d bytes). Access it via resource URI: %s", validPath, mimeType, info.Size(), resourceURI),
+						Text: fmt.Sprintf("Binary file: %s (%s, %d bytes). Access it via resource URI: %s", displayPath, mimeType, info.Size(), resourceURI),
 					},
 					mcp.EmbeddedResource{
 						Type: "resource",
 						Resource: mcp.TextResourceContents{
 							URI:      resourceURI,
 							MIMEType: "text/plain",
-							Text:     fmt.Sprintf("Binary file: %s (%s, %d bytes)", validPath, mimeType, info.Size()),
+							Text:     fmt.Sprintf("Binary file: %s (%s, %d bytes)", displayPath, mimeType, info.Size()),
 						},
 					},
 				},

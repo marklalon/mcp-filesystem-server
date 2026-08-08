@@ -23,7 +23,8 @@ func (fs *FilesystemHandler) HandleReadResource(
 		return nil, fmt.Errorf("unsupported URI scheme: %s", uri)
 	}
 
-	// Extract the path from the URI
+	// Extract the path from the URI. Resource URIs carry a path relative to the
+	// root directory, which validatePath resolves against it.
 	path := strings.TrimPrefix(uri, "file://")
 
 	// Validate the path
@@ -46,11 +47,11 @@ func (fs *FilesystemHandler) HandleReadResource(
 		}
 
 		var result strings.Builder
-		result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", validPath))
+		result.WriteString(fmt.Sprintf("Directory listing for: %s\n\n", fs.relPath(validPath)))
 
 		for _, entry := range entries {
 			entryPath := filepath.Join(validPath, entry.Name())
-			entryURI := pathToResourceURI(entryPath)
+			entryURI := fs.pathToResourceURI(entryPath)
 
 			if entry.IsDir() {
 				result.WriteString(fmt.Sprintf("[DIR]  %s (%s)\n", entry.Name(), entryURI))

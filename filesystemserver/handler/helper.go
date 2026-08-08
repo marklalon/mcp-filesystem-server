@@ -11,74 +11,91 @@ import (
 	"github.com/gabriel-vasile/mimetype"
 )
 
-// isPathInAllowedDirs checks if a path is within any of the allowed directories
-func (fs *FilesystemHandler) isPathInAllowedDirs(path string) bool {
-	// Ensure path is absolute and clean
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return false
+// isPathInRoot checks whether an absolute path is the root directory itself or
+// lies inside it. The separator guards against a prefix match on a sibling
+// directory (e.g. /tmp/foo should not match /tmp/foobar).
+func (fs *FilesystemHandler) isPathInRoot(absPath string) bool {
+	cleaned := filepath.Clean(absPath)
+	if cleaned == fs.rootDir {
+		return true
 	}
 
-	// Add trailing separator to ensure we're checking a directory or a file within a directory
-	// and not a prefix match (e.g., /tmp/foo should not match /tmp/foobar)
-	if !strings.HasSuffix(absPath, string(filepath.Separator)) {
-		// If it's a file, we need to check its directory
-		if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
-			absPath = filepath.Dir(absPath) + string(filepath.Separator)
-		} else {
-			absPath = absPath + string(filepath.Separator)
-		}
+	// The root of a volume ("/" or "C:\") already ends with a separator
+	prefix := fs.rootDir
+	if !strings.HasSuffix(prefix, string(filepath.Separator)) {
+		prefix += string(filepath.Separator)
 	}
-
-	// Check if the path is within any of the allowed directories
-	for _, dir := range fs.allowedDirs {
-		if strings.HasPrefix(absPath, dir) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(cleaned, prefix)
 }
 
-func (fs *FilesystemHandler) validatePath(requestedPath string) (string, error) {
-	// Always convert to absolute path first
-	abs, err := filepath.Abs(requestedPath)
+// resolvePath turns a path given by a tool caller into an absolute path.
+// Relative paths - including "", "." and "./" - are resolved against the root
+// directory rather than the process working directory. Absolute paths are
+// accepted as-is and are rejected later if they fall outside the root.
+func (fs *FilesystemHandler) resolvePath(requestedPath string) string {
+	if requestedPath == "" {
+		return fs.rootDir
+	}
+	if filepath.IsAbs(requestedPath) {
+		return filepath.Clean(requestedPath)
+	}
+	return filepath.Join(fs.rootDir, requestedPath)
+}
+
+// relPath renders an absolute path as a path relative to the root directory,
+// using forward slashes so that output is the same on every platform. The root
+// directory itself renders as ".".
+func (fs *FilesystemHandler) relPath(absPath string) string {
+	rel, err := filepath.Rel(fs.rootDir, filepath.Clean(absPath))
 	if err != nil {
-		return "", fmt.Errorf("invalid path: %w", err)
+		// Not expressible relative to the root; fall back to the path as given
+		return filepath.ToSlash(absPath)
 	}
+	return filepath.ToSlash(rel)
+}
 
-	// Check if path is within allowed directories
-	if !fs.isPathInAllowedDirs(abs) {
-		return "", fmt.Errorf(
-			"access denied - path outside allowed directories: %s",
-			abs,
-		)
-	}
+// pathToResourceURI converts an absolute path to a resource URI holding the
+// path relative to the root directory.
+func (fs *FilesystemHandler) pathToResourceURI(absPath string) string {
+	return "file://" + fs.relPath(absPath)
+}
 
-	// Handle symlinks
+// validatePath turns a path given by a tool caller into an absolute path that
+// is guaranteed to lie inside the root directory. The path is resolved before
+// it is checked, so that a symlink cannot be used to step outside the root, and
+// so that a path spelled differently but pointing at the same file (a Windows
+// 8.3 short name, say) is recognised as being inside it.
+func (fs *FilesystemHandler) validatePath(requestedPath string) (string, error) {
+	abs := fs.resolvePath(requestedPath)
+
 	realPath, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return "", err
 		}
-		// For new files, check parent directory
+
+		// The path does not exist yet, so resolve its parent instead. This is
+		// what allows a file to be created or written through.
 		parent := filepath.Dir(abs)
 		realParent, err := filepath.EvalSymlinks(parent)
 		if err != nil {
-			return "", fmt.Errorf("parent directory does not exist: %s", parent)
+			return "", fmt.Errorf("parent directory does not exist: %s", fs.relPath(parent))
 		}
 
-		if !fs.isPathInAllowedDirs(realParent) {
+		if !fs.isPathInRoot(realParent) {
 			return "", fmt.Errorf(
-				"access denied - parent directory outside allowed directories",
+				"access denied - path outside the allowed directory: %s",
+				requestedPath,
 			)
 		}
-		return abs, nil
+		return filepath.Join(realParent, filepath.Base(abs)), nil
 	}
 
-	// Check if the real path (after resolving symlinks) is still within allowed directories
-	if !fs.isPathInAllowedDirs(realPath) {
+	// Check if the real path (after resolving symlinks) is within the root
+	if !fs.isPathInRoot(realPath) {
 		return "", fmt.Errorf(
-			"access denied - symlink target outside allowed directories",
+			"access denied - path outside the allowed directory: %s",
+			requestedPath,
 		)
 	}
 

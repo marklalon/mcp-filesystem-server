@@ -23,38 +23,6 @@ func (fs *FilesystemHandler) HandleCopyFile(
 		return nil, err
 	}
 
-	// Handle empty or relative paths for source
-	if source == "." || source == "./" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		source = cwd
-	}
-	if destination == "." || destination == "./" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		destination = cwd
-	}
-
 	validSource, err := fs.validatePath(source)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -68,6 +36,8 @@ func (fs *FilesystemHandler) HandleCopyFile(
 		}, nil
 	}
 
+	displaySource := fs.relPath(validSource)
+
 	// Check if source exists
 	srcInfo, err := os.Stat(validSource)
 	if os.IsNotExist(err) {
@@ -75,7 +45,7 @@ func (fs *FilesystemHandler) HandleCopyFile(
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Error: Source does not exist: %s", source),
+					Text: fmt.Sprintf("Error: Source does not exist: %s", displaySource),
 				},
 			},
 			IsError: true,
@@ -104,6 +74,7 @@ func (fs *FilesystemHandler) HandleCopyFile(
 			IsError: true,
 		}, nil
 	}
+	displayDest := fs.relPath(validDest)
 
 	// Create parent directory for destination if it doesn't exist
 	destDir := filepath.Dir(validDest)
@@ -148,15 +119,15 @@ func (fs *FilesystemHandler) HandleCopyFile(
 		}
 	}
 
-	resourceURI := pathToResourceURI(validDest)
+	resourceURI := fs.pathToResourceURI(validDest)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
 				Text: fmt.Sprintf(
 					"Successfully copied %s to %s",
-					source,
-					destination,
+					displaySource,
+					displayDest,
 				),
 			},
 			mcp.EmbeddedResource{
@@ -164,7 +135,7 @@ func (fs *FilesystemHandler) HandleCopyFile(
 				Resource: mcp.TextResourceContents{
 					URI:      resourceURI,
 					MIMEType: "text/plain",
-					Text:     fmt.Sprintf("Copied file: %s", validDest),
+					Text:     fmt.Sprintf("Copied file: %s", displayDest),
 				},
 			},
 		},

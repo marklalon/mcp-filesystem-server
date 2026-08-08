@@ -19,24 +19,6 @@ func (fs *FilesystemHandler) HandleGetFileInfo(
 		return nil, err
 	}
 
-	// Handle empty or relative paths like "." or "./" by converting to absolute path
-	if path == "." || path == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		path = cwd
-	}
-
 	validPath, err := fs.validatePath(path)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -49,6 +31,7 @@ func (fs *FilesystemHandler) HandleGetFileInfo(
 			IsError: true,
 		}, nil
 	}
+	displayPath := fs.relPath(validPath)
 
 	info, err := fs.getFileStats(validPath)
 	if err != nil {
@@ -69,7 +52,7 @@ func (fs *FilesystemHandler) HandleGetFileInfo(
 		mimeType = detectMimeType(validPath)
 	}
 
-	resourceURI := pathToResourceURI(validPath)
+	resourceURI := fs.pathToResourceURI(validPath)
 
 	// Determine file type text
 	var fileTypeText string
@@ -85,7 +68,7 @@ func (fs *FilesystemHandler) HandleGetFileInfo(
 				Type: "text",
 				Text: fmt.Sprintf(
 					"File information for: %s\n\nSize: %d bytes\nCreated: %s\nModified: %s\nAccessed: %s\nIsDirectory: %v\nIsFile: %v\nPermissions: %s\nMIME Type: %s\nResource URI: %s",
-					validPath,
+					displayPath,
 					info.Size,
 					info.Created.Format(time.RFC3339),
 					info.Modified.Format(time.RFC3339),
@@ -104,7 +87,7 @@ func (fs *FilesystemHandler) HandleGetFileInfo(
 					MIMEType: "text/plain",
 					Text: fmt.Sprintf("%s: %s (%s, %d bytes)",
 						fileTypeText,
-						validPath,
+						displayPath,
 						mimeType,
 						info.Size),
 				},

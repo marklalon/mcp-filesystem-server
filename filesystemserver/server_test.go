@@ -10,7 +10,7 @@ import (
 
 // regression test for invalid schema => missing items in array definition
 func TestReadMultipleFilesSchema(t *testing.T) {
-	fsserver, err := filesystemserver.NewFilesystemServer([]string{t.TempDir()})
+	fsserver, err := filesystemserver.NewFilesystemServer(t.TempDir())
 	require.NoError(t, err)
 
 	mcpClient := startTestClient(t, fsserver)

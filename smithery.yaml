@@ -6,21 +6,16 @@ startCommand:
     # JSON Schema defining the configuration options for the MCP.
     type: object
     required:
-      - allowedDirectory
+      - workspaceDirectory
     properties:
-      allowedDirectory:
+      workspaceDirectory:
         type: string
-        description: The absolute path to an allowed directory for the filesystem
-          server. For example, in the Docker container '/app' is a good default.
-      additionalDirectories:
-        type: array
-        items:
-          type: string
-        description: Optional additional allowed directories.
+        description: The absolute path to the single directory the filesystem
+          server serves. All tool paths are relative to it. For example, in the
+          Docker container '/app' is a good default.
   commandFunction:
     # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
     |-
-    (config) => { const args = [config.allowedDirectory]; if (config.additionalDirectories && Array.isArray(config.additionalDirectories)) { args.push(...config.additionalDirectories); } return { command: './server', args: args }; }
+    (config) => ({ command: './server', args: [config.workspaceDirectory] })
   exampleConfig:
-    allowedDirectory: /app
-    additionalDirectories: []
+    workspaceDirectory: /app

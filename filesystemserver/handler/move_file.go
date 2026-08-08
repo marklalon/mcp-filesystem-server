@@ -22,42 +22,6 @@ func (fs *FilesystemHandler) HandleMoveFile(
 		return nil, err
 	}
 
-	// Handle empty or relative paths for source
-	if source == "." || source == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		source = cwd
-	}
-
-	// Handle empty or relative paths for destination
-	if destination == "." || destination == "./" {
-		// Get current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					mcp.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("Error resolving current directory: %v", err),
-					},
-				},
-				IsError: true,
-			}, nil
-		}
-		destination = cwd
-	}
-
 	validSource, err := fs.validatePath(source)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -71,21 +35,25 @@ func (fs *FilesystemHandler) HandleMoveFile(
 		}, nil
 	}
 
+	displaySource := fs.relPath(validSource)
+
 	// Check if source exists
 	if _, err := os.Stat(validSource); os.IsNotExist(err) {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				mcp.TextContent{
 					Type: "text",
-					Text: fmt.Sprintf("Error: Source does not exist: %s", source),
+					Text: fmt.Sprintf("Error: Source does not exist: %s", displaySource),
 				},
 			},
 			IsError: true,
 		}, nil
 	}
 
-	// For destination path, validate the parent directory first and create it if needed
-	destDir := filepath.Dir(destination)
+	// For destination path, validate the parent directory first and create it if
+	// needed. The destination is resolved before taking its parent, so that a
+	// relative destination is anchored to the root directory.
+	destDir := filepath.Dir(fs.resolvePath(destination))
 	validDestDir, err := fs.validatePath(destDir)
 	if err != nil {
 		return &mcp.CallToolResult{
@@ -125,6 +93,7 @@ func (fs *FilesystemHandler) HandleMoveFile(
 			IsError: true,
 		}, nil
 	}
+	displayDest := fs.relPath(validDest)
 
 	if err := os.Rename(validSource, validDest); err != nil {
 		return &mcp.CallToolResult{
@@ -138,15 +107,15 @@ func (fs *FilesystemHandler) HandleMoveFile(
 		}, nil
 	}
 
-	resourceURI := pathToResourceURI(validDest)
+	resourceURI := fs.pathToResourceURI(validDest)
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.TextContent{
 				Type: "text",
 				Text: fmt.Sprintf(
 					"Successfully moved %s to %s",
-					source,
-					destination,
+					displaySource,
+					displayDest,
 				),
 			},
 			mcp.EmbeddedResource{
@@ -154,7 +123,7 @@ func (fs *FilesystemHandler) HandleMoveFile(
 				Resource: mcp.TextResourceContents{
 					URI:      resourceURI,
 					MIMEType: "text/plain",
-					Text:     fmt.Sprintf("Moved file: %s", validDest),
+					Text:     fmt.Sprintf("Moved file: %s", displayDest),
 				},
 			},
 		},

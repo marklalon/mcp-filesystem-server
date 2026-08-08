@@ -20,7 +20,7 @@ func TestReadfile_Valid(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "test"), []byte(content), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 	request := mcp.CallToolRequest{}
 	request.Params.Name = "read_file"
@@ -34,9 +34,35 @@ func TestReadfile_Valid(t *testing.T) {
 	assert.Equal(t, content, result.Content[0].(mcp.TextContent).Text)
 }
 
+func TestReadfile_RelativePath(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0755))
+
+	content := "nested-content"
+	err := os.WriteFile(filepath.Join(dir, "sub", "test"), []byte(content), 0644)
+	require.NoError(t, err)
+
+	handler, err := NewFilesystemHandler(dir)
+	require.NoError(t, err)
+
+	// Both separators are accepted for a path relative to the root directory
+	for _, path := range []string{"sub/test", filepath.Join("sub", "test")} {
+		t.Run(path, func(t *testing.T) {
+			request := mcp.CallToolRequest{}
+			request.Params.Name = "read_file"
+			request.Params.Arguments = map[string]any{"path": path}
+
+			result, err := handler.HandleReadFile(context.Background(), request)
+			require.NoError(t, err)
+			require.False(t, result.IsError, "unexpected error: %v", result.Content)
+			assert.Equal(t, content, result.Content[0].(mcp.TextContent).Text)
+		})
+	}
+}
+
 func TestReadfile_Invalid(t *testing.T) {
 	dir := t.TempDir()
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	request := mcp.CallToolRequest{}
@@ -65,7 +91,7 @@ func TestReadfile_LineRange(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("one\ntwo\nthree\nfour\nfive\n"), 0644))
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -123,7 +149,7 @@ func TestReadfile_LineRange_NoTrailingNewline(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("one\ntwo\nthree"), 0644))
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	request := mcp.CallToolRequest{}
@@ -145,7 +171,7 @@ func TestReadfile_LineRange_LongLine(t *testing.T) {
 	longLine := strings.Repeat("x", 128*1024)
 	require.NoError(t, os.WriteFile(path, []byte("first\n"+longLine+"\nlast\n"), 0644))
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	request := mcp.CallToolRequest{}
@@ -168,7 +194,7 @@ func TestReadfile_LineRange_Invalid(t *testing.T) {
 	path := filepath.Join(dir, "test.txt")
 	require.NoError(t, os.WriteFile(path, []byte("one\ntwo\n"), 0644))
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -214,7 +240,7 @@ func TestReadfile_NoAccess(t *testing.T) {
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir1))
+	handler, err := NewFilesystemHandler(dir1)
 	require.NoError(t, err)
 
 	request := mcp.CallToolRequest{}
@@ -226,5 +252,5 @@ func TestReadfile_NoAccess(t *testing.T) {
 	result, err := handler.HandleReadFile(context.Background(), request)
 	require.NoError(t, err)
 	assert.True(t, result.IsError)
-	assert.Contains(t, fmt.Sprint(result.Content[0]), "access denied - path outside allowed directories")
+	assert.Contains(t, fmt.Sprint(result.Content[0]), "access denied - path outside the allowed directory")
 }

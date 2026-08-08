@@ -31,17 +31,6 @@ func callSearchWithinFiles(
 	return result, result.Content[0].(mcp.TextContent).Text
 }
 
-// resolvedPath returns the path as the handler reports it, with symlinks resolved.
-// On Windows this also expands the 8.3 short names that t.TempDir may hand back.
-func resolvedPath(t *testing.T, dir string, name string) string {
-	t.Helper()
-
-	resolvedDir, err := filepath.EvalSymlinks(dir)
-	require.NoError(t, err)
-
-	return filepath.Join(resolvedDir, name)
-}
-
 func TestSearchWithinFiles_Pattern(t *testing.T) {
 
 	// setting up test folder
@@ -59,12 +48,12 @@ func TestSearchWithinFiles_Pattern(t *testing.T) {
 	err = os.WriteFile(notesTxt, []byte("ALPHA in caps\nalpha lower\n"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
-	// Paths as they appear in the tool output
-	mainGoOut := resolvedPath(t, dir, "main.go")
-	notesTxtOut := resolvedPath(t, dir, "notes.txt")
+	// Paths as they appear in the tool output, relative to the root directory
+	mainGoOut := "main.go"
+	notesTxtOut := "notes.txt"
 
 	tests := []struct {
 		info       string
@@ -164,7 +153,7 @@ func TestSearchWithinFiles_InvalidRegex(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("func Alpha() {}\n"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	// The same pattern is a valid literal, so it must only fail in regex mode
@@ -186,7 +175,7 @@ func TestSearchWithinFiles_InvalidRegex(t *testing.T) {
 
 func TestSearchWithinFiles_EmptySubstring(t *testing.T) {
 	dir := t.TempDir()
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	result, text := callSearchWithinFiles(t, handler, map[string]any{
@@ -205,7 +194,7 @@ func TestSearchWithinFiles_TruncatesAroundMatch(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "long.txt"), []byte(line+"\n"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	// The window must be centred on the match in regex mode too, where the match
@@ -234,7 +223,7 @@ func TestSearchWithinFiles_TruncatesOnRuneBoundaries(t *testing.T) {
 	err := os.WriteFile(filepath.Join(dir, "emoji.txt"), []byte(line+"\n"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	result, text := callSearchWithinFiles(t, handler, map[string]any{
@@ -266,7 +255,7 @@ func TestSearchWithinFiles_LongLines(t *testing.T) {
 	err = os.WriteFile(filepath.Join(dir, "beyond.txt"), []byte(beyond), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
 	t.Run("match on a long line", func(t *testing.T) {
@@ -329,10 +318,10 @@ func TestSearchWithinFiles_RegexRespectsLimits(t *testing.T) {
 	err = os.WriteFile(filepath.Join(nested, "nested.txt"), []byte("hit 6\n"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
-	nestedTxtOut := resolvedPath(t, nested, "nested.txt")
+	nestedTxtOut := "nested/nested.txt"
 
 	t.Run("max_results", func(t *testing.T) {
 		result, text := callSearchWithinFiles(t, handler, map[string]any{

@@ -22,62 +22,59 @@ func TestSearchFiles_Pattern(t *testing.T) {
 	// - test.c
 
 	dir := t.TempDir()
-	// The handler reports resolved paths, so expand the 8.3 short names that
-	// t.TempDir() may hand back on Windows before building the expected paths.
-	resolvedDir, err := filepath.EvalSymlinks(dir)
-	require.NoError(t, err, "Failed to resolve symlinks for directory: %s", dir)
-	dir = resolvedDir
 
-	test_h := filepath.Join(dir, "test.h")
-	err = os.WriteFile(test_h, []byte("foo"), 0644)
+	err := os.WriteFile(filepath.Join(dir, "test.h"), []byte("foo"), 0644)
 	require.NoError(t, err)
 
-	test_c := filepath.Join(dir, "test.c")
-	err = os.WriteFile(test_c, []byte("foo"), 0644)
+	err = os.WriteFile(filepath.Join(dir, "test.c"), []byte("foo"), 0644)
 	require.NoError(t, err)
 
 	fooDir := filepath.Join(dir, "foo")
 	err = os.MkdirAll(fooDir, 0755)
 	require.NoError(t, err)
 
-	foo_bar_h := filepath.Join(fooDir, "bar.h")
-	err = os.WriteFile(foo_bar_h, []byte("foo"), 0644)
+	err = os.WriteFile(filepath.Join(fooDir, "bar.h"), []byte("foo"), 0644)
 	require.NoError(t, err)
 
-	foo_test_c := filepath.Join(fooDir, "test.c")
-	err = os.WriteFile(foo_test_c, []byte("foo"), 0644)
+	err = os.WriteFile(filepath.Join(fooDir, "test.c"), []byte("foo"), 0644)
 	require.NoError(t, err)
 
-	handler, err := NewFilesystemHandler(resolveAllowedDirs(t, dir))
+	handler, err := NewFilesystemHandler(dir)
 	require.NoError(t, err)
 
+	// Matches are reported relative to the root directory, with forward slashes
 	tests := []struct {
 		info    string
 		pattern string
 		matches []string
 	}{
-		{info: "use placeholder with extension", pattern: "*.h", matches: []string{test_h, foo_bar_h}},
-		{info: "use placeholder with name", pattern: "test.*", matches: []string{test_h, test_c}},
-		{info: "same filename", pattern: "test.c", matches: []string{test_c, foo_test_c}},
+		{info: "use placeholder with extension", pattern: "*.h", matches: []string{"test.h", "foo/bar.h"}},
+		{info: "use placeholder with name", pattern: "test.*", matches: []string{"test.h", "test.c"}},
+		{info: "same filename", pattern: "test.c", matches: []string{"test.c", "foo/test.c"}},
 	}
 
-	for _, test := range tests {
-		t.Run(test.info, func(t *testing.T) {
-			request := mcp.CallToolRequest{}
-			request.Params.Name = "search_files"
-			request.Params.Arguments = map[string]any{
-				"path":    dir,
-				"pattern": test.pattern,
-			}
+	// The search path is given relative to the root directory
+	for _, searchPath := range []string{".", dir} {
+		for _, test := range tests {
+			t.Run(test.info, func(t *testing.T) {
+				request := mcp.CallToolRequest{}
+				request.Params.Name = "search_files"
+				request.Params.Arguments = map[string]any{
+					"path":    searchPath,
+					"pattern": test.pattern,
+				}
 
-			result, err := handler.HandleSearchFiles(context.Background(), request)
-			require.NoError(t, err)
-			assert.False(t, result.IsError)
-			assert.Len(t, result.Content, 1)
+				result, err := handler.HandleSearchFiles(context.Background(), request)
+				require.NoError(t, err)
+				assert.False(t, result.IsError)
+				assert.Len(t, result.Content, 1)
 
-			for _, match := range test.matches {
-				assert.Contains(t, result.Content[0].(mcp.TextContent).Text, match)
-			}
-		})
+				text := result.Content[0].(mcp.TextContent).Text
+				assert.NotContains(t, text, dir, "absolute paths must not leak into results")
+				for _, match := range test.matches {
+					assert.Contains(t, text, match)
+				}
+			})
+		}
 	}
 }
