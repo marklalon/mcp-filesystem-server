@@ -31,10 +31,16 @@ func NewFilesystemServer(allowedDirs []string) (*server.MCPServer, error) {
 	// Register tool handlers
 	s.AddTool(mcp.NewTool(
 		"read_file",
-		mcp.WithDescription("Read the complete contents of a file from the file system."),
+		mcp.WithDescription("Read the contents of a file from the file system. Reads the complete file by default, or a range of lines when start_line and/or end_line are given."),
 		mcp.WithString("path",
 			mcp.Description("Path to the file to read"),
 			mcp.Required(),
+		),
+		mcp.WithNumber("start_line",
+			mcp.Description("First line to read, 1-based and inclusive (default: 1). Text files only."),
+		),
+		mcp.WithNumber("end_line",
+			mcp.Description("Last line to read, 1-based and inclusive (default: last line of the file). Text files only."),
 		),
 	), h.HandleReadFile)
 

@@ -15,8 +15,11 @@ This MCP server provides secure access to the local filesystem via the Model Con
 #### File Operations
 
 - **read_file**
-  - Read the complete contents of a file from the file system
-  - Parameters: `path` (required): Path to the file to read
+  - Read the contents of a file from the file system, either in full or a range of lines
+  - Parameters:
+    - `path` (required): Path to the file to read
+    - `start_line` (optional): First line to read, 1-based and inclusive (default: 1). Text files only
+    - `end_line` (optional): Last line to read, 1-based and inclusive (default: last line of the file). Text files only
 
 - **read_multiple_files**
   - Read the contents of multiple files in a single operation
