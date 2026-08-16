@@ -47,6 +47,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 		mcp.WithNumber("end_line",
 			mcp.Description("Last line to read, 1-based and inclusive (default: last line of the file). Text files only."),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleReadFile)
 
 	s.AddTool(mcp.NewTool(
@@ -60,6 +63,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Content to write to the file"),
 			mcp.Required(),
 		),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleWriteFile)
 
 	s.AddTool(mcp.NewTool(
@@ -69,6 +74,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Path of the directory to list, relative to the workspace directory"),
 			mcp.Required(),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleListDirectory)
 
 	s.AddTool(mcp.NewTool(
@@ -78,6 +86,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Path of the directory to create, relative to the workspace directory"),
 			mcp.Required(),
 		),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleCreateDirectory)
 
 	s.AddTool(mcp.NewTool(
@@ -91,6 +101,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Destination path, relative to the workspace directory"),
 			mcp.Required(),
 		),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleCopyFile)
 
 	s.AddTool(mcp.NewTool(
@@ -104,6 +116,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Destination path, relative to the workspace directory"),
 			mcp.Required(),
 		),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
 	), h.HandleMoveFile)
 
 	s.AddTool(mcp.NewTool(
@@ -117,6 +131,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Search pattern to match against file names"),
 			mcp.Required(),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleSearchFiles)
 
 	s.AddTool(mcp.NewTool(
@@ -126,6 +143,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Description("Path to the file or directory, relative to the workspace directory"),
 			mcp.Required(),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleGetFileInfo)
 
 	s.AddTool(mcp.NewTool(
@@ -136,6 +156,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 			mcp.Required(),
 			mcp.Items(map[string]any{"type": "string"}),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleReadMultipleFiles)
 
 	s.AddTool(mcp.NewTool(
@@ -151,6 +174,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 		mcp.WithBoolean("follow_symlinks",
 			mcp.Description("Whether to follow symbolic links (default: false)"),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleTree)
 
 	s.AddTool(mcp.NewTool(
@@ -163,6 +189,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 		mcp.WithBoolean("recursive",
 			mcp.Description("Whether to recursively delete directories (default: false)"),
 		),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
 	), h.HandleDeleteFile)
 
 	s.AddTool(mcp.NewTool(
@@ -186,6 +214,8 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 		mcp.WithBoolean("regex",
 			mcp.Description("Treat the find pattern as a regular expression (default: false)"),
 		),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
 	), h.HandleModifyFile)
 
 	s.AddTool(mcp.NewTool(
@@ -211,6 +241,9 @@ func NewFilesystemServer(rootDir string, ignoredDirPatterns ...string) (*server.
 		mcp.WithBoolean("ignore_case",
 			mcp.Description("Match case-insensitively (default: false)"),
 		),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 	), h.HandleSearchWithinFiles)
 
 	return s, nil
